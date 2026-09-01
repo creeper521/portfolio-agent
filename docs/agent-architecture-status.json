@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "portfolio-agent",
-  "updatedAt": "2026-08-28",
+  "updatedAt": "2026-09-01",
   "overallStatus": "IN_PROGRESS",
   "policy": {
     "scope": "CURRENT_PROJECT_ONLY",
@@ -32,12 +32,12 @@
     {
       "id": "EVIDENCE_BEFORE_COMPLETION",
       "status": "FAILED",
-      "evidence": "As of 2026-08-28, deterministic, privacy and Provider-free packaged gates have fresh evidence. The Qwen v7 General Explanation candidate, bounded same-model transport retry, pre-Provider Comparison boundary and diagnostic laboratory passed offline tests; the fixed corpus contains 100 topics and 300 prompts, but its current certification fixtures are TEST_LOOPBACK and cannot be promoted as formal evidence. EVIDENCE_BEFORE_COMPLETION stays FAILED because no fresh REAL_PROVIDER 300-sample quality matrix or real Provider happy path ran, Qwen v7 remains non-selectable, and the independent GATE-19 double-model packaged lane has not run. Offline guard artifacts, test totals and HTTP success are not completion evidence."
+      "evidence": "As of 2026-09-01, deterministic full/package gates and the dedicated real Qwen Project Recommendation to Project Discussion path have fresh evidence, including PostgreSQL state and six desktop/mobile browser scenarios. The user explicitly directed Qwen v8 to become selectable and default; its Goal binding uses the fixed-flat goal.provider-draft.v3 compiler boundary while General remains provider v4/application v3. EVIDENCE_BEFORE_COMPLETION stays FAILED because the authorized L4 Goal matrices still contain draft rejections, the first General round has 0/3 success for each explanation depth, no fresh REAL_PROVIDER 300-sample General certification exists, and GATE-19 has not run. Dedicated project-path success, HTTP success and offline guards are not whole-provider completion evidence."
     },
     {
       "id": "PRIVACY_BOUNDARY",
       "status": "PASS",
-      "evidence": "Fresh 2026-08-28 evidence: production privacy checks passed across 533 main files. AgentStatePayloadCodecTest decrypts and scans the complete settlement sentinel across publicTurn, contexts and challenges; JdbcAgentStateStoreIntegrationTest executes the PostgreSQL complete settlement sentinel path and replays REPLAY_BODY_NOT_RETAINED. The unique model Transport seam rejects high-confidence secret assignments, standalone API keys and PEM private-key markers before HTTP or provider.call events while keeping server credentials only in the Authorization header. The diagnostic laboratory accepts only the fixed synthetic corpus, requires a dedicated marked raw root outside the repository, applies a fixed 24-hour expiry, and excludes TEST_LOOPBACK captures from formal certification. Production diagnostics retain only closed metadata and never Provider raw bodies. Overall status remains IN_PROGRESS because real Provider and Browser gates remain open."
+      "evidence": "Fresh 2026-09-01 evidence: production privacy checks cover 534 main files. AgentStatePayloadCodecTest decrypts and scans the complete settlement sentinel, and JdbcAgentStateStoreIntegrationTest executes the PostgreSQL settlement/replay boundary. Real Qwen project-discussion probes emitted only closed aggregate diagnostics and did not retain Provider bodies, prompts, credentials, tokens, handles or visitor text. The unique Transport secret scan and repo-external raw-artifact fence remain unchanged. Overall status remains IN_PROGRESS because the L4 Goal/General stability and General certification gates are still open."
     }
   ],
   "activeAuthorities": {

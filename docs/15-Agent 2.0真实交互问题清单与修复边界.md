@@ -3,7 +3,7 @@
 
 > **文档性质：** Agent 2.0 开放生产问题与已批准架构、验证、文档治理工作的唯一账本。
 > **总体状态：** `IN_PROGRESS`。
-> **本轮边界：** Goal/General 确定性实现、Frontend 验收断言与分层 runner 已更新；公开 canonical/PublicTurn 合同不变。Qwen 外呼授权被安全审查拒绝，本批未执行真实 Provider，Provider Gate 保持未完成。
+> **本轮边界：** A2-121 的 Project-only 主体类型合同、Bundle/PostgreSQL 检索过滤、Evidence 传播、ResultFactory 纵深防御与真实 action 生命周期已完成；真实 Qwen `PROJECT_DISCUSSION` 聚合门以及桌面/移动浏览器 6 个场景已通过。Qwen L4 的 Goal 草案矩阵与 General 三档质量仍失败，不能据此宣称整体 Provider READY，A2-121 与总体状态继续保持开放。
 
 ## 1. 当前结论与证据边界
 
@@ -15,7 +15,7 @@
 
 - 正式命名空间只有 `A2`、`ARCH`、`GATE`、`DOC`。`A2` 表示生产行为缺陷；其余三类分别表示架构、验证和文档治理工作。
 - 水位只表示编号曾使用到的位置，单调递增、永不复用，不保存事项标题、状态或正文：
-  - A2 已用至 A2-120
+  - A2 已用至 A2-121
   - ARCH 已用至 ARCH-22
   - GATE 已用至 GATE-23
   - DOC 已用至 DOC-09
@@ -108,6 +108,7 @@
 | A2-117 | P1 | NEXT | OPEN | 事实：Goal v2 继续单次调用并编译为 `goal.proposal.v5`；Qwen General v7 候选新增 `general.provider-draft.v4 -> general-provider-draft-compiler.v4 -> general.draft.v3`，三档 Explanation 统一编译为 DEFINITION/MECHANISM 两条 canonical statement。Operation binding fingerprint 继续同时驱动请求和本地校验；Codec 只接受不透明的已验证 carrier。候选 JAR 只配置硬编码为 `selectable:false` 的 v7，因此自身不公开 Qwen；现网与公开合同 fixture 仍为 v6。真实 300 条 Provider 认证与 packaged Browser 未运行。定位：`backend/src/main/java/com/portfolio/agent/infrastructure/model/configuration/ApprovedModelExecutionProfile.java`、`backend/src/main/java/com/portfolio/agent/turn/infrastructure/model/GeneralProviderDraftCompiler.java`、`scripts/provider-diagnostic-lab/`。 | 获批的目标合同通过同一 fingerprint 驱动请求与校验；Explanation 三档作为一个能力独立认证，Comparison 保持不可达且无 fallback。 | Goal v2 保持严格一次性 carrier 解码和单次调用；General v4 只有批准 transport 闭集最多两 attempt；不允许 runtime repair、跨模型 fallback 或用离线环回冒充真实认证。 | 同一合同 fingerprint 驱动请求与本地校验；固定 100×3 corpus 的真实 `REAL_PROVIDER` 证据、三档盲审、全量/隐私/JAR/Browser 门通过后，才可原子提升 v7 与公开目录。 |
 | A2-118 | P0 | NOW | OPEN | 事实：网络/5xx 恢复可返回 `ok=false, invalid=false`，随后落入空 `ensureSession()`；`watchEffect` 会清除唯一 ResumeToken。待验证：仍需聚焦单元和 Browser 复现。 定位：`frontend/src/features/agent/composables/useConversationResume.ts`、`frontend/src/features/agent/components/AgentWorkspace.vue`。 | 瞬时恢复失败保留唯一 ResumeToken，并允许用户重试原会话。 | 瞬时失败必须保留 token 与可重试恢复状态；只有权威 invalid 才清除。 | 单元模拟 network/5xx，Browser 冷启动失败后重试恢复原会话；token 全程不丢失。 |
 | A2-119 | P1 | NEXT | OPEN | 事实：旧 `general.provider-draft.v3` 的 Comparison pair identity 仍保留为历史/回归能力，但当前任何 `GENERAL_COMPARISON` 均在 Provider 前固定 `OUT_OF_SCOPE`，不再只有 `subjects×dimensions > 20` 才阻断。真实 Provider 与 Browser Comparison 对齐未运行。定位：`backend/src/main/java/com/portfolio/agent/turn/planning/GoalBoundaryPolicy.java`、`backend/src/main/resources/model-contracts/general.provider-draft.v3.schema.json`。 | 在重新开放 Comparison 前，独立定义容量、pair identity、wire/canonical 合同与用户可见降级。 | 当前不得把 v3 历史回放或 Explanation v4 认证作为 Comparison 发布证据；不得截断、按位置猜测或静默拆分问题。 | 当前所有 Comparison 均零 Provider 调用；未来独立认证需覆盖最大/超限组合、乱序/缺失/重复 pair、真实 Provider 与 Browser 对齐。 |
+| A2-121 | P1 | NOW | OPEN | 事实：PRE_FIX 匿名探针证明 Project/Case 混合候选会被 Project Discussion 拒绝；修复后 `PORTFOLIO_RECOMMEND` 冻结 `allowedSubjectKinds={PROJECT}`，Bundle/PostgreSQL 均在评分/有限窗口前过滤，正式 kind 贯穿 Candidate 与 Evidence，ResultFactory 对混合类型整批失败关闭。POST_FIX 只产生并入选 Project。真实 Qwen 专用门已完成 `Recommendation → ENTER_RESULT → ROUTE_IN_CONTEXT → EXIT_CONTEXT`，桌面/移动浏览器 6 个场景通过；但 L4 两轮 Goal 矩阵仍有草案拒绝，General Explanation 三档首轮为 0/3，整体 Provider 稳定性未通过。canonical release 的 repository risk-artifact scan 仍被既有本地日志命中。定位：`PortfolioInvocationFactory`、Bundle/PostgreSQL 检索、`PortfolioSemanticResultFactory`、`ProjectDiscussionCoordinator`、Qwen v8 Goal wire v3、实施计划与批准设计。 | Project Recommendation 在所有评分、候选窗口和 limit 前只产生 Project，并使公开响应的真实 action 稳定进入 active Project Discussion。 | 保持正式 kind 贯穿、双后端同合同、Promotion/ResultFactory 整批 fail-closed；不放宽 coordinator、不修改 Context 持久化 shape、不新增 Case Discussion。专用项目讨论路径已经闭合；剩余责任是分离处理 L4 Goal/General 稳定性与 canonical 仓库风险产物，不用专用 PASS 冒充整体 READY。 | 固定 RED/GREEN、IN_MEMORY/PostgreSQL、真实 Qwen 专用 action 与浏览器门已通过；只有 L4 Goal/General 稳定性及文档/发布状态复验也通过后才删除本项。 |
 
 ## 6. 架构工作（ARCH）
 
@@ -179,7 +180,7 @@
 
 1. **证据与账本先行：** 维持运行时 replay 分类一致性、修复 release 非零退出、机器状态新鲜度、活动文档引用和 Browser/spec 可达性。此批不改变生产能力。
 2. **隐私、授权与结算权威：** 收口 persistence-safe replay、Provider/Binding/Readiness、Clarification reservation 和 settlement command；任何隐私或接收方错配先 fail-closed。
-3. **现行交互链：** 修复 Recommendation 约束投影、会话/澄清/pending/retry/expiry、恢复 Token 与真实 scenario/Browser body。
+3. **现行交互链：** 修复 Recommendation 主体类型与约束投影、会话/澄清/pending/retry/expiry、恢复 Token 与真实 scenario/Browser body。
 4. **语义与表达：** 完成 Audience、subjectHint、多轮引用、Portfolio depth/Comparison/Cross-domain、General 语言/深度/caveat/pair identity。
 5. **外层稳定性与清理：** 跨 JVM API/Browser 恢复已取得新鲜 PASS；后续在获得外呼批准后执行 Qwen/GLM 独立矩阵，并独立运行 GATE-19 双模型 packaged lane、token/cost canary，最后完成退役资产零引用。Goal v2 已获 Level 3 批准并完成确定性绑定，但不得据此外推真实 Provider PASS。
 

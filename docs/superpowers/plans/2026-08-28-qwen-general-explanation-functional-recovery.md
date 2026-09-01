@@ -436,3 +436,9 @@ git diff --check
 - 诊断实验室经三轮独立阻塞复审收紧 raw-root、来源证明、机器 guard、过期判定、历史基线与证据链；最终复审通过后才允许本计划历史化。
 - 新鲜离线证据：Backend `1298 tests / 0 failures / 0 errors / 4 skipped`；100 主题、300 prompts corpus SHA-256 为 `c58844d3b43ee96d9aa009cdd5fc797b0eaea569ed47300270b2e9fd9814b5a7`；机械 producer 闭包为 103 classes / 8 resources；实验室围栏、双回放、认证报告、质量/架构/隐私/文档门与候选 JAR 门均通过。
 - 本记录不包含真实 Provider 成功样本。Qwen v7 仍为不可选择候选，候选 JAR 不公开 Qwen；现网与公开合同 fixture 仍是 v6。`EVIDENCE_BEFORE_COMPLETION`、A2-80/A2-117 与 GATE-19 继续开放。
+
+## 17. 后续用户指令与当前偏差记录（2026-09-01）
+
+本计划上述内容仍是 2026-08-28 离线候选的历史收口事实。后续任务中，用户明确要求把 Qwen 配置为 `selectable:true`、接入真实 API、完成项目讨论路径并提交推送；当前实现因此提升为 Qwen v8 selectable/default catalog。Goal wire 同步改为 fixed-flat `goal.provider-draft.v3`，General 仍为 provider v4/application v3/compiler v4。
+
+该后续目录变化不回写为本历史计划已完成 F4/F5：真实 `PROJECT_DISCUSSION` 专用 API 与桌面/移动浏览器门已通过，但 L4 Goal 草案矩阵和 General 三档质量失败，300 条封存认证未运行。Qwen General 仍为 `NOT_READY/IN_PROGRESS`，`EVIDENCE_BEFORE_COMPLETION`、A2-80/A2-117 与 GATE-19 继续开放。

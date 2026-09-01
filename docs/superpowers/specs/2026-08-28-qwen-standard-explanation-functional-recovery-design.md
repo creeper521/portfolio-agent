@@ -1126,3 +1126,9 @@ Provider Transport
 ```
 
 这条链路允许分号、字符串包装和缺失 caveats 被合理恢复，但不会允许关键解释缺失、模型身份漂移、secret 泄露、未授权工具执行、silent fallback 或 canonical 损坏被包装成成功。
+
+## 24. 后续用户指令与认证状态（2026-09-01）
+
+用户在后续 Project Recommendation 修复任务中明确要求 Qwen `selectable:true`、真实 API 实测以及提交推送。当前代码据此使用 Qwen v8 selectable/default catalog；Goal 使用 fixed-flat `goal.provider-draft.v3 -> goal.proposal.v5`，General 仍使用本文批准的 provider v4/application v3/compiler v4。
+
+该用户指令改变了目录暴露状态，但没有提供本文 F4/F5 的完成证据。真实项目讨论专用 API 与桌面/移动 Browser 门已经通过；L4 Goal 两轮矩阵仍存在草案拒绝，General Explanation 三档首轮均为 0/3，300 条封存认证未运行。因此本文的 General READY、F4/F5、GATE-19 与整体发布结论继续保持未完成；不得用项目讨论专用 PASS 替代 General 能力认证。
