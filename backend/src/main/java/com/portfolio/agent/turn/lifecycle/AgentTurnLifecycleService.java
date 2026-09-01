@@ -51,6 +51,8 @@ import com.portfolio.agent.turn.projection.PublicAgentTurnProjector;
 import com.portfolio.agent.turn.projection.ModelExecutionProjection;
 import com.portfolio.agent.turn.projection.ModelExecutionProjectionFactory;
 import com.portfolio.agent.turn.projection.SuggestedAction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -79,6 +81,8 @@ import java.util.stream.Collectors;
  * State 读写全部经由 stateExecutor 并受 TurnDeadline 与 settlementReserve 约束。</p>
  */
 public final class AgentTurnLifecycleService {
+    private static final Logger LOG = LoggerFactory.getLogger(
+            AgentTurnLifecycleService.class);
     private final ConversationSemanticStateProjector semanticStateProjector =
             new ConversationSemanticStateProjector();
     private final PortfolioKnowledgeGateway knowledgeGateway;
@@ -1211,11 +1215,16 @@ public final class AgentTurnLifecycleService {
                 command.getContextHandle().orElseThrow(),
                 clock.instant(),
                 deadline.minus(settlementReserve)).orElse(null);
-        if (!(context instanceof ContinuationContext.Recommendation recommendation)) {
+        DiscussionContinuationFailure contextFailure =
+                classifyDiscussionContext(context);
+        if (contextFailure != DiscussionContinuationFailure.NONE) {
             return discussionUnavailable(
                     command.getRequestId(),
-                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+                    "DISCUSSION_CONTEXT_UNAVAILABLE",
+                    contextFailure);
         }
+        ContinuationContext.Recommendation recommendation =
+                (ContinuationContext.Recommendation) context;
         ProjectDiscussionCoordinator.Transition transition;
         try {
             transition = discussionCoordinator.enter(
@@ -1225,10 +1234,11 @@ public final class AgentTurnLifecycleService {
                     command.getResultItemId().orElseThrow(),
                     publicProjectIds(content),
                     session.expiresAt());
-        } catch (IllegalArgumentException invalid) {
+        } catch (ProjectDiscussionCoordinator.Rejection invalid) {
             return discussionUnavailable(
                     command.getRequestId(),
-                    "DISCUSSION_CONTEXT_UNAVAILABLE");
+                    "DISCUSSION_CONTEXT_UNAVAILABLE",
+                    discussionFailure(invalid.getReason()));
         }
         return executeDiscussionTransition(
                 command, cancellation, content, deadline,
@@ -1352,11 +1362,56 @@ public final class AgentTurnLifecycleService {
 
     /** 统一的讨论不可用降级 Turn（不可重试，提示重新进入项目）。 */
     private Execution discussionUnavailable(UUID requestId, String code) {
+        return discussionUnavailable(
+                requestId, code,
+                DiscussionContinuationFailure.UNCLASSIFIED);
+    }
+
+    /** 记录闭集内部原因后，仍返回资源隐藏的统一公开错误。 */
+    private Execution discussionUnavailable(
+            UUID requestId,
+            String code,
+            DiscussionContinuationFailure reason) {
+        LOG.debug("Project discussion continuation rejected: {}", reason);
         PublicAgentTurn turn = new PublicAgentTurn.CapabilityUnavailable(
                 requestId, code,
                 "当前项目讨论状态不可用，请重新进入项目。",
                 false, List.of());
         return serverFixed(turn);
+    }
+
+    static DiscussionContinuationFailure classifyDiscussionContext(
+            ContinuationContext context) {
+        if (context == null) {
+            return DiscussionContinuationFailure.CONTEXT_NOT_FOUND;
+        }
+        if (!(context instanceof ContinuationContext.Recommendation)) {
+            return DiscussionContinuationFailure.CONTEXT_TYPE_MISMATCH;
+        }
+        return DiscussionContinuationFailure.NONE;
+    }
+
+    private DiscussionContinuationFailure discussionFailure(
+            ProjectDiscussionCoordinator.RejectionReason reason) {
+        return switch (reason) {
+            case CONTEXT_CONVERSATION_MISMATCH ->
+                    DiscussionContinuationFailure.CONTEXT_CONVERSATION_MISMATCH;
+            case CONTEXT_RELEASE_MISMATCH ->
+                    DiscussionContinuationFailure.CONTEXT_RELEASE_MISMATCH;
+            case RESULT_ITEM_NOT_IN_CONTEXT ->
+                    DiscussionContinuationFailure.RESULT_ITEM_NOT_IN_CONTEXT;
+            case RECOMMENDATION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT ->
+                    DiscussionContinuationFailure
+                            .RECOMMENDATION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT;
+            case DISCUSSION_SUBJECT_NOT_CURRENT_PUBLIC_PROJECT ->
+                    DiscussionContinuationFailure
+                            .DISCUSSION_SUBJECT_NOT_CURRENT_PUBLIC_PROJECT;
+            case DISCUSSION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT ->
+                    DiscussionContinuationFailure
+                            .DISCUSSION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT;
+            case SWITCH_PROJECT_NOT_IN_CONTEXT ->
+                    DiscussionContinuationFailure.SWITCH_PROJECT_NOT_IN_CONTEXT;
+        };
     }
 
     /** 讨论请求解析不可用的降级 Turn（可重试，附带"结束讨论"建议动作）。 */
@@ -1879,6 +1934,21 @@ public final class AgentTurnLifecycleService {
             ClarificationChallenge challenge,
             Map<String, Map<String, String>> choiceBindings,
             Map<String, ClarificationStore.TextBinding> textBindings) { }
+    /** 内部讨论续接诊断；公开响应不会暴露这些资源存在性细节。 */
+    enum DiscussionContinuationFailure {
+        NONE,
+        CONTEXT_NOT_FOUND,
+        CONTEXT_TYPE_MISMATCH,
+        CONTEXT_CONVERSATION_MISMATCH,
+        CONTEXT_RELEASE_MISMATCH,
+        RESULT_ITEM_NOT_IN_CONTEXT,
+        RECOMMENDATION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT,
+        DISCUSSION_SUBJECT_NOT_CURRENT_PUBLIC_PROJECT,
+        DISCUSSION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT,
+        SWITCH_PROJECT_NOT_IN_CONTEXT,
+        UNCLASSIFIED
+    }
+
     /**
      * Turn 执行的对外结果：状态、Turn（状态为 COMPLETED/REPLAY 时非空）、
      * 建议等待秒数、结算是否失败降级，以及可选的会话元数据。

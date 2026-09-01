@@ -58,23 +58,27 @@ public final class ProjectDiscussionCoordinator {
             Set<String> currentPublicProjectIds,
             Instant sessionExpiresAt) {
         Objects.requireNonNull(recommendation, "recommendation");
-        if (!recommendation.getConversationId().equals(conversationId)
-                || !recommendation.getContentReleaseId()
-                .equals(contentReleaseId)) {
-            throw new IllegalArgumentException(
-                    "recommendation scope does not match conversation");
+        if (!recommendation.getConversationId().equals(conversationId)) {
+            throw new Rejection(
+                    RejectionReason.CONTEXT_CONVERSATION_MISMATCH);
+        }
+        if (!recommendation.getContentReleaseId().equals(contentReleaseId)) {
+            throw new Rejection(
+                    RejectionReason.CONTEXT_RELEASE_MISMATCH);
         }
         ContinuationContext.ResultItem selected =
                 recommendation.getSelectedResults().stream()
                 .filter(item -> item.resultItemId().equals(resultItemId))
-                .findFirst().orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "result item is outside recommendation"));
+                .findFirst().orElseThrow(() -> new Rejection(
+                        RejectionReason.RESULT_ITEM_NOT_IN_CONTEXT));
         Set<String> candidates = recommendation.getSelectedResults().stream()
                 .map(ContinuationContext.ResultItem::subjectId)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         requireCurrentPublicProjects(
-                candidates, currentPublicProjectIds);
+                candidates,
+                currentPublicProjectIds,
+                RejectionReason
+                        .RECOMMENDATION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT);
         return transition(
                 conversationId, contentReleaseId,
                 selected.subjectId(), candidates,
@@ -94,7 +98,9 @@ public final class ProjectDiscussionCoordinator {
             Set<String> currentPublicProjectIds,
             Instant sessionExpiresAt) {
         requireCurrentPublicProjects(
-                Set.of(projectId), currentPublicProjectIds);
+                Set.of(projectId),
+                currentPublicProjectIds,
+                RejectionReason.DISCUSSION_SUBJECT_NOT_CURRENT_PUBLIC_PROJECT);
         return transition(
                 conversationId, contentReleaseId,
                 projectId, Set.of(projectId), null, sessionExpiresAt);
@@ -115,12 +121,13 @@ public final class ProjectDiscussionCoordinator {
             Set<String> currentPublicProjectIds,
             Instant sessionExpiresAt) {
         if (!current.getSwitchCandidateProjectIds().contains(projectId)) {
-            throw new IllegalArgumentException(
-                    "switch project is outside discussion scope");
+            throw new Rejection(
+                    RejectionReason.SWITCH_PROJECT_NOT_IN_CONTEXT);
         }
         requireCurrentPublicProjects(
                 current.getSwitchCandidateProjectIds(),
-                currentPublicProjectIds);
+                currentPublicProjectIds,
+                RejectionReason.DISCUSSION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT);
         return transition(
                 current.getConversationId(),
                 current.getContentReleaseId(),
@@ -223,10 +230,11 @@ public final class ProjectDiscussionCoordinator {
 
     /** fail-closed 校验：所有必需项目必须仍在当前公开发布中，否则拒绝迁移。 */
     private void requireCurrentPublicProjects(
-            Set<String> required, Set<String> currentPublicProjectIds) {
+            Set<String> required,
+            Set<String> currentPublicProjectIds,
+            RejectionReason reason) {
         if (!currentPublicProjectIds.containsAll(required)) {
-            throw new IllegalArgumentException(
-                    "project is unavailable in current public release");
+            throw new Rejection(reason);
         }
     }
 
@@ -243,6 +251,31 @@ public final class ProjectDiscussionCoordinator {
             Objects.requireNonNull(context, "context");
             Objects.requireNonNull(pointer, "pointer");
             Objects.requireNonNull(overviewGoal, "overviewGoal");
+        }
+    }
+
+    /** 内部闭集拒绝原因；Lifecycle 对外仍统一隐藏为讨论上下文不可用。 */
+    public enum RejectionReason {
+        CONTEXT_CONVERSATION_MISMATCH,
+        CONTEXT_RELEASE_MISMATCH,
+        RESULT_ITEM_NOT_IN_CONTEXT,
+        RECOMMENDATION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT,
+        DISCUSSION_SUBJECT_NOT_CURRENT_PUBLIC_PROJECT,
+        DISCUSSION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT,
+        SWITCH_PROJECT_NOT_IN_CONTEXT
+    }
+
+    /** 带 typed 原因的内部拒绝；调用方不得解析异常 message 做分支。 */
+    public static final class Rejection extends IllegalArgumentException {
+        private final RejectionReason reason;
+
+        private Rejection(RejectionReason reason) {
+            super(Objects.requireNonNull(reason, "reason").name());
+            this.reason = reason;
+        }
+
+        public RejectionReason getReason() {
+            return reason;
         }
     }
 }

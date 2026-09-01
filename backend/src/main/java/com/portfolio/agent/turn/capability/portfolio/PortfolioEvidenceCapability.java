@@ -92,16 +92,35 @@ public final class PortfolioEvidenceCapability {
     private ValidatedEvidenceBundle promote(
             RetrievalAttemptResult result, PortfolioEvidenceInvocation invocation) {
         return promotionValidator.promote(
-                result.getCandidateSet().orElseThrow(), invocation.getContentReleaseId());
+                result.getCandidateSet().orElseThrow(), invocation.getContentReleaseId(),
+                invocation.getAllowedSubjectKinds());
     }
 
     /** 能力执行失败的终止异常，携带分类后的失败原因，供上层映射为 Task 终止理由。 */
     public static final class PortfolioCapabilityException extends RuntimeException {
         private final RetrievalAttemptFailure failure;
+        private final IntegrityReason integrityReason;
         public PortfolioCapabilityException(RetrievalAttemptFailure failure) {
             super(Objects.requireNonNull(failure, "failure").name());
             this.failure = failure;
+            this.integrityReason = null;
+        }
+        public PortfolioCapabilityException(IntegrityReason integrityReason) {
+            super(RetrievalAttemptFailure.INTEGRITY_FAILURE.name());
+            this.failure = RetrievalAttemptFailure.INTEGRITY_FAILURE;
+            this.integrityReason = Objects.requireNonNull(integrityReason, "integrityReason");
         }
         public RetrievalAttemptFailure getFailure() { return failure; }
+        public java.util.Optional<IntegrityReason> getIntegrityReason() {
+            return java.util.Optional.ofNullable(integrityReason);
+        }
+    }
+
+    /** 主体类型契约失败的内部闭集诊断；不暴露主体标识或检索内容。 */
+    public enum IntegrityReason {
+        SUBJECT_KIND_NOT_ALLOWED,
+        RECOMMENDATION_SUBJECT_KIND_CONTRACT_VIOLATION,
+        EXACT_SCOPE_SUBJECT_KIND_MISMATCH,
+        UNRESOLVED_RESULT_SUBJECT
     }
 }

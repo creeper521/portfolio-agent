@@ -3,9 +3,9 @@ package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selecti
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.portfolio.agent.infrastructure.retrieval.EmbeddingVector;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.CandidateRetrievalResult;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.EvidenceReference;
-import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PostgresSelectionRow;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.RetrievalMode;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
@@ -87,6 +87,8 @@ class PostgresHybridCandidateRetrieverTest {
                 "JAVA_BACKEND",
                 "TECH_INTERVIEWER",
                 Set.of("JAVA"),
+                null,
+                Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                 3);
     }
 

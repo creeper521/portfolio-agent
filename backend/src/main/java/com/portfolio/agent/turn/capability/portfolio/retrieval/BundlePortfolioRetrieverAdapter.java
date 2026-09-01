@@ -4,6 +4,7 @@ import com.portfolio.agent.infrastructure.retrieval.EmbeddingVector;
 import com.portfolio.agent.infrastructure.retrieval.LocalEmbeddingPort;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimVerificationStatus;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerEvidence;
@@ -100,8 +101,11 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             RuntimeAnswerContent content,
             AnswerRetrievalCorpus corpus,
             TurnDeadline deadline) {
-        List<AnswerKnowledge> knowledge = new ArrayList<>(content.getProjects());
-        knowledge.addAll(content.getCases());
+        List<AnswerKnowledge> publishedKnowledge = new ArrayList<>(content.getProjects());
+        publishedKnowledge.addAll(content.getCases());
+        List<AnswerKnowledge> knowledge = publishedKnowledge.stream()
+                .filter(subject -> eligible(invocation, subject))
+                .collect(Collectors.toCollection(ArrayList::new));
         List<AnswerClaimCategory> categories = categories(invocation);
         List<String> rankedChunkIds = rankedChunkIds(
                 invocation, strategy, corpus, knowledge, categories);
@@ -117,15 +121,13 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             if (deadline.isExpired()) {
                 break;
             }
-            if (!authorized(invocation.getSubjectScope(), subject)) {
-                continue;
-            }
             List<ClaimEvidenceCandidate> candidates = candidates(
                     content.getContentVersion(), subject, corpus, categories, chunkRanks,
                     invocation.getMaximumEvidenceUnitsPerSubject());
             if (!candidates.isEmpty()) {
                 subjects.add(new CandidateSubject(
-                        subject.getStableId(), route(subject), subject.getTitle(),
+                        subject.getStableId(), subjectKind(subject),
+                        route(subject), subject.getTitle(),
                         content.getContentVersion(), subject.getCareerTrack(),
                         subject.getCapabilityCodes(), candidates));
             }
@@ -197,7 +199,6 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             List<AnswerKnowledge> knowledge,
             List<AnswerClaimCategory> categories) {
         Set<String> eligibleClaims = knowledge.stream()
-                .filter(subject -> authorized(invocation.getSubjectScope(), subject))
                 .flatMap(subject -> subject.getClaims().stream())
                 .filter(claim -> claim.getVerificationStatus()
                         == AnswerClaimVerificationStatus.VERIFIED)
@@ -208,7 +209,6 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 .filter(chunk -> chunk.getText() != null && !chunk.getText().isBlank())
                 .filter(chunk -> chunk.getClaimIds().stream().anyMatch(eligibleClaims::contains))
                 .filter(chunk -> knowledge.stream()
-                        .filter(subject -> authorized(invocation.getSubjectScope(), subject))
                         .anyMatch(subject -> belongsToSubject(chunk, subject)))
                 .map(AnswerRetrievalChunk::getChunkId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -234,24 +234,40 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
             List<String> terms) {
         List<ChunkScore> scores = new ArrayList<>();
         AnswerKeywordIndex index = corpus.getKeywordIndex();
-        for (AnswerKeywordIndex.DocumentEntry document : index.getDocuments()) {
-            if (!eligibleChunks.contains(document.getChunkId())) {
-                continue;
-            }
+        List<AnswerKeywordIndex.DocumentEntry> eligibleDocuments = index.getDocuments().stream()
+                .filter(document -> eligibleChunks.contains(document.getChunkId()))
+                .toList();
+        if (eligibleDocuments.isEmpty()) {
+            return List.of();
+        }
+        int documentCount = eligibleDocuments.size();
+        double averageDocumentLength = eligibleDocuments.stream()
+                .mapToInt(AnswerKeywordIndex.DocumentEntry::getDocumentLength)
+                .average()
+                .orElse(0.0d);
+        Set<String> distinctTerms = new LinkedHashSet<>(terms);
+        Map<String, Long> documentFrequencies = new LinkedHashMap<>();
+        for (String term : distinctTerms) {
+            documentFrequencies.put(term, eligibleDocuments.stream()
+                    .filter(candidate -> candidate.getTermFrequencies()
+                            .getOrDefault(term, 0) > 0)
+                    .count());
+        }
+        for (AnswerKeywordIndex.DocumentEntry document : eligibleDocuments) {
             double score = 0.0d;
-            for (String term : new LinkedHashSet<>(terms)) {
+            for (String term : distinctTerms) {
                 int frequency = document.getTermFrequencies().getOrDefault(term, 0);
-                int documentFrequency = index.getDocumentFrequencies().getOrDefault(term, 0);
+                long documentFrequency = documentFrequencies.get(term);
                 if (frequency == 0 || documentFrequency == 0) {
                     continue;
                 }
                 double inverseDocumentFrequency = Math.log(
-                        1.0d + (index.getDocumentCount() - documentFrequency + 0.5d)
+                        1.0d + (documentCount - documentFrequency + 0.5d)
                                 / (documentFrequency + 0.5d));
                 // 长度归一：相对平均长度的文档按 b=0.75 部分饱和，避免长文档天然占优
-                double lengthRatio = index.getAverageDocumentLength() == 0.0d
+                double lengthRatio = averageDocumentLength == 0.0d
                         ? 0.0d
-                        : document.getDocumentLength() / index.getAverageDocumentLength();
+                        : document.getDocumentLength() / averageDocumentLength;
                 double denominator = frequency + 1.2d * (1.0d - 0.75d + 0.75d * lengthRatio);
                 score += inverseDocumentFrequency * frequency * 2.2d / denominator;
             }
@@ -378,13 +394,33 @@ public final class BundlePortfolioRetrieverAdapter implements PortfolioRetriever
                 LocalDate.of(9999, 12, 31));
     }
 
-    /** 主体是否在获准范围内：ALL_PUBLISHED 放行全部，EXACT 按稳定标识匹配。 */
+    /** 主体同时满足获准范围与 capability 允许的主体类型时，才可进入候选语料。 */
+    private boolean eligible(
+            PortfolioEvidenceInvocation invocation, AnswerKnowledge subject) {
+        return invocation.getAllowedSubjectKinds().contains(subjectKind(subject))
+                && authorized(invocation.getSubjectScope(), subject);
+    }
+
+    /** 主体是否在获准范围内：ALL_PUBLISHED 放行；EXACT 同时匹配稳定标识和显式类型。 */
     private boolean authorized(AuthorizedSubjectScope scope, AnswerKnowledge subject) {
         if (scope.getMode() == AuthorizedSubjectScope.Mode.ALL_PUBLISHED) {
             return true;
         }
         return scope.getSubjects().stream().anyMatch(reference ->
-                reference.getReference().equals(subject.getStableId()));
+                reference.getReference().equals(subject.getStableId())
+                        && switch (reference.getKind()) {
+                            case PROJECT -> subjectKind(subject) == PortfolioSubjectKind.PROJECT;
+                            case CASE -> subjectKind(subject) == PortfolioSubjectKind.CASE;
+                            case RESULT -> false;
+                        });
+    }
+
+    /** Bundle 主体类型到 capability 主体类型的封闭映射，不依赖 route 或 slug。 */
+    private PortfolioSubjectKind subjectKind(AnswerKnowledge subject) {
+        return switch (subject.getSubjectType()) {
+            case PROJECT -> PortfolioSubjectKind.PROJECT;
+            case CASE -> PortfolioSubjectKind.CASE;
+        };
     }
 
     /** chunk 是否归属该主体：按主体类型匹配案例 slug 或项目 slug。 */

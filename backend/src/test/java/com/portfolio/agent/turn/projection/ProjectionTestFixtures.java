@@ -13,6 +13,7 @@ import com.portfolio.agent.turn.capability.general.GeneralPresentation;
 import com.portfolio.agent.turn.capability.general.GeneralSemanticResult;
 import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.presentation.PortfolioPresentation;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 import com.portfolio.agent.turn.execution.GoalCoverage;
@@ -76,7 +77,8 @@ final class ProjectionTestFixtures {
                 AnswerContributionType.PRIMARY, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
                 List.of("evidence-" + subjectId));
-        return new ValidatedEvidenceUnit(subjectId, claim, new PublicSourceReferenceValue(
+        return new ValidatedEvidenceUnit(
+                subjectId, PortfolioSubjectKind.PROJECT, claim, new PublicSourceReferenceValue(
                 key, "Evidence " + subjectId, "public-1", "DOCUMENT",
                 "/projects/" + subjectId, "/evidence/" + subjectId));
     }

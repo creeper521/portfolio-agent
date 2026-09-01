@@ -5,6 +5,7 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceBundle;
 import com.portfolio.agent.turn.planning.SemanticTask;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,8 @@ class PortfolioSupportEvaluatorTest {
             List<PortfolioEvidenceInvocation.FacetProfile> facets) {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_FACT,
-                AuthorizedSubjectScope.allPublished("public-1"), facets, List.of(),
+                AuthorizedSubjectScope.allPublished("public-1"),
+                java.util.Set.of(PortfolioSubjectKind.PROJECT), facets, List.of(),
                 "public-1", CorpusBackend.BUNDLE, SearchStrategy.EXACT, null, null);
     }
 }

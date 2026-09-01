@@ -2,6 +2,7 @@ package com.portfolio.agent.release.benchmark.selection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
 import java.util.List;
 import java.util.Set;
@@ -12,7 +13,9 @@ class PortfolioSelectionBenchmarkEvaluatorTest {
     void scoresBestAcceptableSetAndAbsoluteSafetyCounts() {
         PortfolioSelectionBenchmarkCase benchmarkCase = new PortfolioSelectionBenchmarkCase(
                 "CASE-1", BenchmarkSplit.HOLDOUT,
-                new SelectionTarget("JAVA_BACKEND", "RECRUITER", Set.of("ASYNC_TASK", "SAFETY"), 2),
+                new SelectionTarget(
+                        "JAVA_BACKEND", "RECRUITER", Set.of("ASYNC_TASK", "SAFETY"), null,
+                        allSubjectKinds(), 2),
                 List.of(Set.of("subject-a", "subject-b"), Set.of("subject-a", "subject-c")),
                 Set.of("ASYNC_TASK", "SAFETY"));
         PortfolioSelectionObservation observation = new PortfolioSelectionObservation(
@@ -104,7 +107,8 @@ class PortfolioSelectionBenchmarkEvaluatorTest {
 
     @Test
     void ndcgAt12IsNonPerfectForLateRelevantResultAndStableAcrossAcceptableSetOrder() {
-        SelectionTarget target = new SelectionTarget(null, "HR", Set.of("DELIVERY"), 2);
+        SelectionTarget target = new SelectionTarget(
+                null, "HR", Set.of("DELIVERY"), null, allSubjectKinds(), 2);
         Set<String> first = Set.of("subject-a", "subject-b");
         Set<String> second = Set.of("subject-a", "subject-c");
         PortfolioSelectionObservation observation = new PortfolioSelectionObservation(
@@ -131,8 +135,14 @@ class PortfolioSelectionBenchmarkEvaluatorTest {
 
     private PortfolioSelectionBenchmarkCase benchmark(String id, BenchmarkSplit split) {
         return new PortfolioSelectionBenchmarkCase(
-                id, split, new SelectionTarget(null, "RECRUITER", Set.of("DELIVERY"), 2),
+                id, split, new SelectionTarget(
+                        null, "RECRUITER", Set.of("DELIVERY"), null,
+                        allSubjectKinds(), 2),
                 List.of(Set.of("subject-a")), Set.of("DELIVERY"));
+    }
+
+    private Set<PortfolioSubjectKind> allSubjectKinds() {
+        return Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE);
     }
 
     private PortfolioSelectionObservation observation(String id, long elapsed) {

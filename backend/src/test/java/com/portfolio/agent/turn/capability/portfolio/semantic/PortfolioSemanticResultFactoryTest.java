@@ -5,6 +5,7 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.planning.GoalKind;
 import com.portfolio.agent.turn.planning.SemanticTask;
 import com.portfolio.agent.turn.planning.SemanticTaskParameters;
@@ -48,6 +49,7 @@ class PortfolioSemanticResultFactoryTest {
         PortfolioEvidenceInvocation invocation = new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_RECOMMEND,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION), List.of(),
                 UserGoalProposal.Depth.STANDARD, 2,
                 Set.of("CAREER_TRACK_JAVA_BACKEND", "CAPABILITY_SQL"),
@@ -80,7 +82,8 @@ class PortfolioSemanticResultFactoryTest {
                         subjectId, "implementation-" + subjectId,
                         AnswerClaimCategory.IMPLEMENTATION);
         return new com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit(
-                subjectId, "标题 " + subjectId, careerTrack, capabilities,
+                subjectId, PortfolioSubjectKind.PROJECT,
+                "标题 " + subjectId, careerTrack, capabilities,
                 base.getClaim(), base.getSourceReference());
     }
 
@@ -105,6 +108,7 @@ class PortfolioSemanticResultFactoryTest {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_FACT,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND,
                         PortfolioEvidenceInvocation.FacetProfile.VERIFICATION), List.of(),
                 "public-1", CorpusBackend.BUNDLE, SearchStrategy.EXACT, null, null);

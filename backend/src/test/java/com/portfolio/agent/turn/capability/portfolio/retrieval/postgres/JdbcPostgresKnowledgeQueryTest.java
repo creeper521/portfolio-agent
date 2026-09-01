@@ -4,11 +4,11 @@ import com.portfolio.agent.infrastructure.retrieval.EmbeddingVector;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.ActiveRelease;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PostgresSelectionQuery;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.EvidenceReference;
-import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PostgresSelectionRow;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerAchievementStatus;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjection;
@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JdbcPostgresKnowledgeQueryTest {
 
@@ -50,6 +51,8 @@ class JdbcPostgresKnowledgeQueryTest {
             assertThat(target.getCareerTrack()).isNull();
             assertThat(target.getCapabilityCodes()).isEmpty();
             assertThat(target.getAudienceRole()).isEqualTo("PORTFOLIO_RETRIEVAL");
+            assertThat(target.getAllowedSubjectKinds())
+                    .containsExactly(PortfolioSubjectKind.PROJECT);
         });
         assertThat(result.getCandidates().getReleaseVersion()).isEqualTo("public-1");
         assertThat(result.getPassages())
@@ -67,6 +70,7 @@ class JdbcPostgresKnowledgeQueryTest {
         PortfolioEvidenceInvocation invocation = new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_RECOMMEND,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION), List.of(),
                 com.portfolio.agent.turn.planning.UserGoalProposal.Depth.STANDARD,
                 2, Set.of("CAREER_TRACK_JAVA_BACKEND", "CAPABILITY_SQL"),
@@ -81,14 +85,33 @@ class JdbcPostgresKnowledgeQueryTest {
         assertThat(selectionQuery.searchTargets.getFirst()).satisfies(target -> {
             assertThat(target.getCareerTrack()).isEqualTo("JAVA_BACKEND");
             assertThat(target.getCapabilityCodes()).containsExactly("SQL");
+            assertThat(target.getAllowedSubjectKinds())
+                    .containsExactly(PortfolioSubjectKind.PROJECT);
         });
         assertThat(selectionQuery.searchTargets.get(1)).satisfies(target -> {
             assertThat(target.getCareerTrack()).isNull();
             assertThat(target.getCapabilityCodes()).isEmpty();
+            assertThat(target.getAllowedSubjectKinds())
+                    .containsExactly(PortfolioSubjectKind.PROJECT);
         });
         assertThat(result.getCandidates().getCandidates())
                 .extracting(value -> value.getSubjectId())
                 .containsExactly("project-match", "project-fallback");
+    }
+
+    @Test
+    void exactScopeRejectsAStoredSubjectWhoseKindDoesNotMatchTheAuthorizedPair() {
+        RecordingSelectionQuery selectionQuery = new RecordingSelectionQuery();
+        selectionQuery.exactSubjectKind = PortfolioSubjectKind.CASE;
+        JdbcPostgresKnowledgeQuery query = new JdbcPostgresKnowledgeQuery(
+                selectionQuery,
+                text -> new EmbeddingVector(new float[]{0.1f, 0.2f}),
+                (releaseId, subjectIds) -> List.of());
+
+        assertThatThrownBy(() -> query.retrieve(
+                exactInvocation(),
+                new RetrievalRequest(CorpusBackend.POSTGRESQL, SearchStrategy.EXACT)))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     private PortfolioEvidenceInvocation exactInvocation() {
@@ -100,6 +123,7 @@ class JdbcPostgresKnowledgeQueryTest {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_FACT,
                 AuthorizedSubjectScope.exact(List.of(subject), "public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.VERIFICATION),
                 List.of(),
                 "public-1",
@@ -138,6 +162,7 @@ class JdbcPostgresKnowledgeQueryTest {
         private final List<List<String>> exactSubjectIds = new ArrayList<>();
         private final List<SelectionTarget> exactTargets = new ArrayList<>();
         private final List<SelectionTarget> searchTargets = new ArrayList<>();
+        private PortfolioSubjectKind exactSubjectKind = PortfolioSubjectKind.PROJECT;
 
         @Override
         public ActiveRelease activeRelease() {
@@ -181,7 +206,7 @@ class JdbcPostgresKnowledgeQueryTest {
             exactTargets.add(target);
             return List.of(new PostgresSelectionRow(
                     "project-1",
-                    PortfolioSubjectKind.PROJECT,
+                    exactSubjectKind,
                     "PostgreSQL audit",
                     "Public summary",
                     "/projects/project-1",

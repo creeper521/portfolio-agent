@@ -9,6 +9,7 @@
         "audienceRole": "HR",
         "capabilityCodes": ["DELIVERY", "VERIFICATION"],
         "goal": "backend delivery evidence",
+        "allowedSubjectKinds": ["PROJECT", "CASE"],
         "requestedSize": 2
       },
       "acceptableSubjectSets": [
@@ -25,6 +26,7 @@
         "audienceRole": "INTERVIEWER",
         "capabilityCodes": ["ASYNC_TASK", "FAILURE_ISOLATION"],
         "goal": "reliable asynchronous backend",
+        "allowedSubjectKinds": ["PROJECT", "CASE"],
         "requestedSize": 2
       },
       "acceptableSubjectSets": [["sql-audit-project", "case-public-a-01"]],
@@ -38,6 +40,7 @@
         "audienceRole": "TECH_INTERVIEWER",
         "capabilityCodes": ["EVALUATION", "CODE_NAVIGATION"],
         "goal": "engineering evaluation",
+        "allowedSubjectKinds": ["PROJECT", "CASE"],
         "requestedSize": 2
       },
       "acceptableSubjectSets": [
@@ -45,6 +48,22 @@
         ["case-codegraph-evaluation", "case-public-k-02"]
       ],
       "requiredCapabilities": ["EVALUATION", "CODE_NAVIGATION"]
+    },
+    {
+      "id": "PORTFOLIO-REC-PROJECT-001",
+      "split": "REGRESSION",
+      "target": {
+        "careerTrack": "JAVA_BACKEND",
+        "audienceRole": "INTERVIEWER",
+        "capabilityCodes": [],
+        "goal": "recommend public projects for discussion",
+        "allowedSubjectKinds": ["PROJECT"],
+        "requestedSize": 2
+      },
+      "acceptableSubjectSets": [
+        ["sql-audit-project", "role-reset-tool-project"]
+      ],
+      "requiredCapabilities": []
     }
   ]
 }

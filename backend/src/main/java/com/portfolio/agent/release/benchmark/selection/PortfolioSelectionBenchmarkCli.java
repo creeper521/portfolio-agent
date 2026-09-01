@@ -13,6 +13,7 @@ import com.portfolio.agent.portfolio.repository.PublicPortfolioRepository;
 import com.portfolio.agent.portfolio.repository.file.PublicBundleLoader;
 import com.portfolio.agent.portfolio.repository.postgres.PostgresPublicPortfolioRepository;
 import com.portfolio.agent.portfolio.validation.PortfolioSnapshotValidator;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import java.io.PrintStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -109,16 +110,34 @@ public final class PortfolioSelectionBenchmarkCli {
             throw new IllegalArgumentException("observation release does not match frozen suite");
         }
         Set<String> caseIds = new HashSet<>();
+        Map<String, PortfolioSelectionBenchmarkCase> benchmarkCases = new HashMap<>();
         suite.getCases().forEach(value -> {
-            if (!caseIds.add(value.getId())) {
+            if (!caseIds.add(value.getId())
+                    || benchmarkCases.putIfAbsent(value.getId(), value) != null) {
                 throw new IllegalArgumentException("duplicate benchmark case");
             }
         });
         Set<String> keys = new HashSet<>();
         Map<String, Set<String>> capabilities = new HashMap<>();
         Set<String> subjects = new HashSet<>();
-        snapshot.getProjects().forEach(value -> subjects.add(value.getId()));
-        snapshot.getCases().forEach(value -> subjects.add(value.getId()));
+        Map<String, PortfolioSubjectKind> subjectKinds = new HashMap<>();
+        snapshot.getProjects().forEach(value -> {
+            subjects.add(value.getId());
+            subjectKinds.put(value.getId(), PortfolioSubjectKind.PROJECT);
+        });
+        snapshot.getCases().forEach(value -> {
+            subjects.add(value.getId());
+            subjectKinds.put(value.getId(), PortfolioSubjectKind.CASE);
+        });
+        suite.getCases().forEach(benchmarkCase -> benchmarkCase
+                .getAcceptableSubjectSets().forEach(acceptable -> acceptable.forEach(subjectId -> {
+                    PortfolioSubjectKind kind = subjectKinds.get(subjectId);
+                    if (kind == null
+                            || !benchmarkCase.getTarget().getAllowedSubjectKinds().contains(kind)) {
+                        throw new IllegalArgumentException(
+                                "benchmark acceptable subject violates allowed kinds");
+                    }
+                })));
         for (Claim claim : snapshot.getClaims()) {
             capabilities.computeIfAbsent(claim.getSubjectId(), ignored -> new HashSet<>())
                     .addAll(claim.getTopics());
@@ -149,6 +168,17 @@ public final class PortfolioSelectionBenchmarkCli {
             if (!subjects.containsAll(observation.getRankedCandidateSubjectIds())
                     || !subjects.containsAll(observation.getSelectedSubjectIds())) {
                 throw new IllegalArgumentException("observation references unknown public subject");
+            }
+            PortfolioSelectionBenchmarkCase benchmarkCase = benchmarkCases.get(
+                    observation.getCaseId());
+            if (java.util.stream.Stream.concat(
+                            observation.getRankedCandidateSubjectIds().stream(),
+                            observation.getSelectedSubjectIds().stream())
+                    .map(subjectKinds::get)
+                    .anyMatch(kind -> !benchmarkCase.getTarget()
+                            .getAllowedSubjectKinds().contains(kind))) {
+                throw new IllegalArgumentException(
+                        "observation subject violates benchmark allowed kinds");
             }
             List<SelectedSubjectObservation> selected = new java.util.ArrayList<>();
             for (SelectedSubjectObservation subject : observation.getSelectedSubjects()) {

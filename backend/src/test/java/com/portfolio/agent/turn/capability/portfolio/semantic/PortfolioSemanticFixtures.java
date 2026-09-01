@@ -8,6 +8,7 @@ import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerContributio
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerMateriality;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificationBasis;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceBundle;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
@@ -25,7 +26,7 @@ final class PortfolioSemanticFixtures {
                 AnswerVerificationBasis.EVIDENCE_SUPPORTED,
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
                 List.of("evidence-" + claimId));
-        return new ValidatedEvidenceUnit(subjectId, claim,
+        return new ValidatedEvidenceUnit(subjectId, PortfolioSubjectKind.PROJECT, claim,
                 new PublicSourceReferenceValue(
                         "E-" + claimId, "Evidence", "public-1", "DOCUMENT",
                         "/projects/" + subjectId, "/evidence/" + claimId));

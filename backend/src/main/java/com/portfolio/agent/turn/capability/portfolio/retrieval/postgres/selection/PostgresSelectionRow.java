@@ -1,5 +1,6 @@
 package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection;
 
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import java.util.Objects;
 import java.util.List;
 import java.util.Set;

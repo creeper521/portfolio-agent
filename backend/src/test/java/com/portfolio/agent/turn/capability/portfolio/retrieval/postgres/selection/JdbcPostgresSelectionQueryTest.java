@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
 import java.util.List;
 import java.util.Set;
@@ -34,6 +35,7 @@ class JdbcPostgresSelectionQueryTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         "public goal",
+                        Set.of(PortfolioSubjectKind.PROJECT),
                         3),
                 12);
 
@@ -50,11 +52,16 @@ class JdbcPostgresSelectionQueryTest {
                 .contains("e.public_status = 'APPROVED'")
                 .contains("c.verification_status = 'VERIFIED'")
                 .contains("c.release_id = ps.release_id")
-                .contains("e.release_id = ps.release_id");
+                .contains("e.release_id = ps.release_id")
+                .contains("ps.subject_kind = ANY(CAST(? AS text[]))");
+        assertThat(sql.getValue().indexOf("ps.subject_kind = ANY(CAST(? AS text[]))"))
+                .isLessThan(sql.getValue().indexOf("LIMIT ?"));
         assertThat(sql.getValue().indexOf("e.public_status = 'APPROVED'"))
                 .isLessThan(sql.getValue().indexOf("LIMIT ?"));
         assertThat(parameters.getValue())
-                .contains("9d1bca16-1e9a-4d54-a692-b7f7c68dbc20");
+                .contains(
+                        "9d1bca16-1e9a-4d54-a692-b7f7c68dbc20",
+                        "{\"PROJECT\"}");
     }
 
     @Test
@@ -74,6 +81,7 @@ class JdbcPostgresSelectionQueryTest {
                         "INTERVIEWER",
                         Set.of("INCIDENT_ANALYSIS", "RAG"),
                         "故障定位 检索增强",
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                         3),
                 12);
 
@@ -107,7 +115,9 @@ class JdbcPostgresSelectionQueryTest {
         query.searchVector(
                 "9d1bca16-1e9a-4d54-a692-b7f7c68dbc20",
                 new float[]{0.1f, 0.2f},
-                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 3),
+                new SelectionTarget(
+                        "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null,
+                        Set.of(PortfolioSubjectKind.PROJECT), 3),
                 12);
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
@@ -117,7 +127,11 @@ class JdbcPostgresSelectionQueryTest {
                 any(Object[].class));
         assertThat(sql.getValue().indexOf("e.public_status = 'APPROVED'"))
                 .isLessThan(sql.getValue().indexOf("LIMIT ?"));
-        assertThat(sql.getValue()).contains("sc.capability_code = ANY");
+        assertThat(sql.getValue())
+                .contains("sc.capability_code = ANY")
+                .contains("ps.subject_kind = ANY(CAST(? AS text[]))");
+        assertThat(sql.getValue().indexOf("ps.subject_kind = ANY(CAST(? AS text[]))"))
+                .isLessThan(sql.getValue().indexOf("LIMIT ?"));
     }
 
     @Test
@@ -137,6 +151,7 @@ class JdbcPostgresSelectionQueryTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         "public goal",
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                         3),
                 12);
 
@@ -170,6 +185,7 @@ class JdbcPostgresSelectionQueryTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         null,
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                         3),
                 12);
 
@@ -198,7 +214,8 @@ class JdbcPostgresSelectionQueryTest {
                 "9d1bca16-1e9a-4d54-a692-b7f7c68dbc20",
                 List.of("project-1", "case-2"),
                 new SelectionTarget(
-                        "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 2));
+                        "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null,
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE), 2));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate).query(
@@ -213,6 +230,7 @@ class JdbcPostgresSelectionQueryTest {
                 .contains("ps.career_track AS career_track")
                 .contains("ps.career_track = ?")
                 .contains("sc.capability_code = ANY")
+                .doesNotContain("ps.subject_kind = ANY(CAST(? AS text[]))")
                 .doesNotContain("owner.career_track")
                 .doesNotContain("owner.stable_id = cs.project_stable_id");
     }

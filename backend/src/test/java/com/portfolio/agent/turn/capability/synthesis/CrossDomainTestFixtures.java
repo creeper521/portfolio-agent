@@ -10,6 +10,7 @@ import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificatio
 import com.portfolio.agent.turn.capability.general.GeneralSemanticResult;
 import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 import com.portfolio.agent.turn.execution.CancellationSignal;
 import com.portfolio.agent.turn.execution.TaskExecutionContext;
@@ -47,7 +48,8 @@ final class CrossDomainTestFixtures {
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
                 List.of("evidence-1"));
         ValidatedEvidenceUnit unit = new ValidatedEvidenceUnit(
-                "project-a", claim, new PublicSourceReferenceValue(
+                "project-a", PortfolioSubjectKind.PROJECT, claim,
+                new PublicSourceReferenceValue(
                         "E-01", "并发实现证据", "public-1", "DOCUMENT",
                         "/projects/project-a", "/evidence/e-01"));
         return new PortfolioSemanticResult.Fact(

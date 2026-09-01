@@ -4,6 +4,7 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.planning.SemanticTask;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +50,7 @@ class RetrievalFallbackPolicyTest {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_FACT,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                java.util.Set.of(PortfolioSubjectKind.PROJECT),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND), List.of(),
                 "public-1", backend, strategy,
                 backend == CorpusBackend.POSTGRESQL ? CorpusBackend.BUNDLE : null,

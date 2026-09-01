@@ -12,8 +12,10 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selectio
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.RetrievalRequest;
+import com.portfolio.agent.turn.planning.GoalSubjectReference;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -78,6 +80,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 invocation.getRecommendationCareerTrack(), FIXED_AUDIENCE_ROLE,
                 invocation.getRecommendationCapabilityCodes(),
                 controlledQuery(invocation),
+                invocation.getAllowedSubjectKinds(),
                 invocation.getRequestedSize() == 0 ? 1 : invocation.getRequestedSize());
         ActiveRelease release = selectionQuery.activeRelease();
         if (invocation.getSubjectScope().getMode() == AuthorizedSubjectScope.Mode.EXACT) {
@@ -91,6 +94,7 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 !matchesAll(value, invocation)))) {
             SelectionTarget broadTarget = new SelectionTarget(
                     null, FIXED_AUDIENCE_ROLE, Set.of(), controlledQuery(invocation),
+                    invocation.getAllowedSubjectKinds(),
                     invocation.getRequestedSize());
             CandidateRetrievalResult broad = candidateRetriever.retrieve(
                     release, broadTarget, MAX_SUBJECTS, request.getStrategy());
@@ -147,8 +151,10 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                             release.getReleaseVersion(), RetrievalMode.FTS_ONLY, List.of()),
                     List.of());
         }
-        List<SelectionCandidate> candidates = selectionQuery.findByIds(
-                        release.getReleaseId(), subjectIds, target).stream()
+        List<PostgresSelectionRow> rows = selectionQuery.findByIds(
+                release.getReleaseId(), subjectIds, target);
+        validateExactSubjectKinds(invocation, rows);
+        List<SelectionCandidate> candidates = rows.stream()
                 .map(this::exactCandidate)
                 .toList();
         List<AnswerClaimCategory> categories = categories(invocation);
@@ -161,6 +167,30 @@ public final class JdbcPostgresKnowledgeQuery implements PostgresKnowledgeQuery 
                 new CandidateRetrievalResult(
                         release.getReleaseVersion(), RetrievalMode.FTS_ONLY, candidates),
                 passages);
+    }
+
+    /** 精确范围的标识与类型组成同一授权 pair；数据库返回不同类型时整批按完整性失败关闭。 */
+    private void validateExactSubjectKinds(
+            PortfolioEvidenceInvocation invocation,
+            List<PostgresSelectionRow> rows) {
+        java.util.Map<String, PortfolioSubjectKind> expectedKinds = new java.util.LinkedHashMap<>();
+        invocation.getSubjectScope().getSubjects().forEach(subject ->
+                expectedKinds.put(subject.getReference(), portfolioSubjectKind(subject.getKind())));
+        for (PostgresSelectionRow row : rows) {
+            if (!invocation.getAllowedSubjectKinds().contains(row.getSubjectKind())
+                    || expectedKinds.get(row.getSubjectId()) != row.getSubjectKind()) {
+                throw new IllegalStateException("exact subject kind violates authorized scope");
+            }
+        }
+    }
+
+    private PortfolioSubjectKind portfolioSubjectKind(GoalSubjectReference.Kind kind) {
+        return switch (kind) {
+            case PROJECT -> PortfolioSubjectKind.PROJECT;
+            case CASE -> PortfolioSubjectKind.CASE;
+            case RESULT -> throw new IllegalStateException(
+                    "result subject must be resolved before PostgreSQL retrieval");
+        };
     }
 
     /** 精确查询行转候选：targetFit 固定 1.0（精确命中即满分），冲突惩罚为 0。 */

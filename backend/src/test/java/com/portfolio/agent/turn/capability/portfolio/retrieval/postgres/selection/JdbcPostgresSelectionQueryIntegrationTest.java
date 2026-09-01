@@ -2,6 +2,7 @@ package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selecti
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PostgresSelectionRow;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
 import java.util.List;
@@ -54,6 +55,7 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         "needle",
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                         3),
                 3);
 
@@ -67,7 +69,9 @@ class JdbcPostgresSelectionQueryIntegrationTest {
     void emptyFtsQueryStillReturnsQualifiedCandidatesInStablePublicOrder() {
         List<PostgresSelectionRow> rows = query.searchFts(
                 ACTIVE_RELEASE_ID,
-                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of(), null, 3),
+                new SelectionTarget(
+                        "JAVA_BACKEND", "INTERVIEWER", Set.of(), null,
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE), 3),
                 3);
 
         assertThat(rows).extracting(PostgresSelectionRow::getSubjectId)
@@ -85,6 +89,7 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         null,
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                         3),
                 3);
 
@@ -108,6 +113,7 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                         "INTERVIEWER",
                         Set.of("JAVA"),
                         "java case",
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                         5),
                 10);
 
@@ -129,11 +135,15 @@ class JdbcPostgresSelectionQueryIntegrationTest {
 
         List<PostgresSelectionRow> withCapability = query.searchFts(
                 ACTIVE_RELEASE_ID,
-                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null, 5),
+                new SelectionTarget(
+                        "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), null,
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE), 5),
                 10);
         List<PostgresSelectionRow> withoutCapability = query.searchFts(
                 ACTIVE_RELEASE_ID,
-                new SelectionTarget("JAVA_BACKEND", "INTERVIEWER", Set.of(), null, 5),
+                new SelectionTarget(
+                        "JAVA_BACKEND", "INTERVIEWER", Set.of(), null,
+                        Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE), 5),
                 10);
 
         assertThat(withCapability).extracting(PostgresSelectionRow::getSubjectId)
@@ -144,6 +154,42 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                 .satisfies(row -> assertThat(row.getCareerTrack()).isNull());
         assertThat(withoutCapability).extracting(PostgresSelectionRow::getSubjectId)
                 .doesNotContain("STANDALONE-JAVA", "STANDALONE-RAG");
+    }
+
+    @Test
+    void projectKindFilterRunsBeforeFtsAndVectorCandidateLimits() {
+        for (int index = 1; index <= 60; index++) {
+            insertHighRankingCase("HIGH-CASE-" + String.format("%02d", index));
+        }
+        SelectionTarget projectOnly = new SelectionTarget(
+                "JAVA_BACKEND", "INTERVIEWER", Set.of("JAVA"), "needle",
+                Set.of(PortfolioSubjectKind.PROJECT), 2);
+
+        List<PostgresSelectionRow> ftsRows = query.searchFts(
+                ACTIVE_RELEASE_ID, projectOnly, 2);
+        List<PostgresSelectionRow> vectorRows = query.searchVector(
+                ACTIVE_RELEASE_ID, vector(1.0f, 0.0f), projectOnly, 2);
+
+        assertThat(ftsRows).hasSize(2).allSatisfy(row ->
+                assertThat(row.getSubjectKind()).isEqualTo(PortfolioSubjectKind.PROJECT));
+        assertThat(vectorRows).hasSize(2).allSatisfy(row ->
+                assertThat(row.getSubjectKind()).isEqualTo(PortfolioSubjectKind.PROJECT));
+    }
+
+    @Test
+    void exactLookupReturnsActualKindSoTheAdjacentAuthorizationBoundaryCanRejectMismatch() {
+        insertCase(
+                ACTIVE_RELEASE_ID, "EXACT-KIND-MISMATCH", "ELIGIBLE-01", "JAVA",
+                "exact kind mismatch");
+        SelectionTarget projectOnly = new SelectionTarget(
+                null, "INTERVIEWER", Set.of("JAVA"), null,
+                Set.of(PortfolioSubjectKind.PROJECT), 1);
+
+        List<PostgresSelectionRow> rows = query.findByIds(
+                ACTIVE_RELEASE_ID, List.of("EXACT-KIND-MISMATCH"), projectOnly);
+
+        assertThat(rows).singleElement().satisfies(row ->
+                assertThat(row.getSubjectKind()).isEqualTo(PortfolioSubjectKind.CASE));
     }
 
     private void seed() {
@@ -348,6 +394,17 @@ class JdbcPostgresSelectionQueryIntegrationTest {
                 title,
                 vectorLiteral(vector(0.3f, 0.7f)),
                 "c".repeat(64));
+    }
+
+    private void insertHighRankingCase(String subjectId) {
+        insertCase(
+                ACTIVE_RELEASE_ID, subjectId, "ELIGIBLE-01", "JAVA",
+                "needle needle needle needle needle");
+        jdbcTemplate.update("""
+                UPDATE retrieval_document
+                SET embedding = CAST(? AS vector)
+                WHERE release_id = CAST(? AS uuid) AND subject_stable_id = ?
+                """, vectorLiteral(vector(1.0f, 0.0f)), ACTIVE_RELEASE_ID, subjectId);
     }
 
     private float[] vector(float first, float second) {

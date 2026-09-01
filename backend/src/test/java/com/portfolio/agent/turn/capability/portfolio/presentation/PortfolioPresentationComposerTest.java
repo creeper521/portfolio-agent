@@ -10,6 +10,7 @@ import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerMateriality
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerVerificationBasis;
 import com.portfolio.agent.turn.execution.PublicSourceReferenceValue;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceUnit;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.semantic.PortfolioSemanticResult;
 import com.portfolio.agent.turn.planning.UserGoalProposal;
 import org.junit.jupiter.api.Test;
@@ -54,7 +55,8 @@ class PortfolioPresentationComposerTest {
                 "通过回归测试验证。", "detail", AnswerAchievementStatus.IMPLEMENTED_TESTED,
                 AnswerContributionType.PRIMARY, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY, List.of("evidence-1"));
-        ValidatedEvidenceUnit unit = new ValidatedEvidenceUnit("project-a", claim,
+        ValidatedEvidenceUnit unit = new ValidatedEvidenceUnit(
+                "project-a", PortfolioSubjectKind.PROJECT, claim,
                 new PublicSourceReferenceValue(
                         "E-01", "测试报告", "public-1", "TEST_RESULT",
                         "/projects/project-a", "/evidence/e-01"));
@@ -121,7 +123,8 @@ class PortfolioPresentationComposerTest {
             String subjectId, String title, String id, AnswerClaimCategory category) {
         ValidatedEvidenceUnit base = unit(id, category);
         return new ValidatedEvidenceUnit(
-                subjectId, title, "JAVA_BACKEND", java.util.Set.of("SQL"),
+                subjectId, PortfolioSubjectKind.PROJECT,
+                title, "JAVA_BACKEND", java.util.Set.of("SQL"),
                 base.getClaim(), base.getSourceReference());
     }
 
@@ -132,7 +135,8 @@ class PortfolioPresentationComposerTest {
                 AnswerContributionType.PRIMARY, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY,
                 List.of("evidence-" + id));
-        return new ValidatedEvidenceUnit("project-a", claim,
+        return new ValidatedEvidenceUnit(
+                "project-a", PortfolioSubjectKind.PROJECT, claim,
                 new PublicSourceReferenceValue(
                         "E-" + id, "公开来源" + id, "public-1", "TEST_RESULT",
                         "/projects/project-a", "/evidence/e-" + id));

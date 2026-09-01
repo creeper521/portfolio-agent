@@ -51,15 +51,31 @@ class ProjectDiscussionCoordinatorTest {
                 recommendation(), "item-c",
                 Set.of("project-a", "project-b"),
                 NOW.plus(Duration.ofMinutes(30))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("result item");
+                .isInstanceOfSatisfying(
+                        ProjectDiscussionCoordinator.Rejection.class,
+                        rejection -> assertThat(rejection.getReason()).isEqualTo(
+                                ProjectDiscussionCoordinator.RejectionReason
+                                        .RESULT_ITEM_NOT_IN_CONTEXT));
         assertThatThrownBy(() -> coordinator.enter(
                 "conversation-1", "release-1",
                 recommendation(), "item-b",
                 Set.of("project-a"),
                 NOW.plus(Duration.ofMinutes(30))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("public release");
+                .isInstanceOfSatisfying(
+                        ProjectDiscussionCoordinator.Rejection.class,
+                        rejection -> assertThat(rejection.getReason()).isEqualTo(
+                                ProjectDiscussionCoordinator.RejectionReason
+                                        .RECOMMENDATION_CANDIDATE_NOT_CURRENT_PUBLIC_PROJECT));
+        assertThatThrownBy(() -> coordinator.enter(
+                "conversation-1", "release-2",
+                recommendation(), "item-b",
+                Set.of("project-a", "project-b"),
+                NOW.plus(Duration.ofMinutes(30))))
+                .isInstanceOfSatisfying(
+                        ProjectDiscussionCoordinator.Rejection.class,
+                        rejection -> assertThat(rejection.getReason()).isEqualTo(
+                                ProjectDiscussionCoordinator.RejectionReason
+                                        .CONTEXT_RELEASE_MISMATCH));
     }
 
     @Test

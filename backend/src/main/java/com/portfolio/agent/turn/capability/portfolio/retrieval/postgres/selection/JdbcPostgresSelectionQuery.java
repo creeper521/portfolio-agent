@@ -1,7 +1,7 @@
 package com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection;
 
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.EvidenceReference;
-import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PortfolioSubjectKind;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.PostgresSelectionRow;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.SelectionTarget;
 import java.sql.Array;
@@ -57,6 +57,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                  AND owner.stable_id = cs.project_stable_id
                  AND owner.subject_kind = 'PROJECT'
                 WHERE ps.release_id = CAST(? AS uuid)
+                  AND ps.subject_kind = ANY(CAST(? AS text[]))
                   AND (
                       CAST(? AS text) IS NULL
                       OR COALESCE(owner.career_track, ps.career_track) = ?
@@ -176,6 +177,7 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                  AND owner.stable_id = cs.project_stable_id
                  AND owner.subject_kind = 'PROJECT'
                 WHERE ps.release_id = CAST(? AS uuid)
+                  AND ps.subject_kind = ANY(CAST(? AS text[]))
                   AND (
                       CAST(? AS text) IS NULL
                       OR COALESCE(owner.career_track, ps.career_track) = ?
@@ -264,7 +266,11 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             ORDER BY r.distance, r.display_order, ps.stable_id, c.stable_id, e.stable_id
             """;
 
-    /** 精确标识查询 SQL：按传入主体列表直接取行（仅 DIRECT 支撑链接），保持输入顺序。 */
+    /**
+     * 精确标识查询 SQL：按传入主体列表直接取实际行（仅 DIRECT 支撑链接），保持输入顺序。
+     * 此处不按 allowed kinds 隐藏行，紧邻的 KnowledgeQuery 完整性边界必须看到实际 kind，
+     * 才能把同 ID 错类型判为合同失败而不是静默空结果。
+     */
     private static final String EXACT_IDS_SQL = """
             SELECT ps.stable_id,
                    ps.subject_kind,
@@ -329,8 +335,8 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
     }
 
     /**
-     * 全文检索候选主体。参数按占位符出现顺序绑定：releaseId、careerTrack（两处）、
-     * 能力码数组字面量（四处）、检索词、limit、releaseId（外层）。
+     * 全文检索候选主体。参数按占位符出现顺序绑定：releaseId、允许主体类型数组、
+     * careerTrack（两处）、能力码数组字面量（四处）、检索词、limit、releaseId（外层）。
      *
      * @param releaseId 内容发布 UUID 字符串
      * @param target    选择目标（职业赛道/能力码/目标文本转为 tsquery）
@@ -344,10 +350,12 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             int limit) {
         String queryText = queryText(target);
         String capabilityFilter = capabilityArrayLiteral(target);
+        String subjectKindFilter = subjectKindArrayLiteral(target);
         return jdbcTemplate.query(
                 FTS_SQL,
                 this::mapRows,
                 releaseId,
+                subjectKindFilter,
                 target.getCareerTrack(),
                 target.getCareerTrack(),
                 capabilityFilter,
@@ -372,10 +380,12 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
             SelectionTarget target,
             int limit) {
         String capabilityFilter = capabilityArrayLiteral(target);
+        String subjectKindFilter = subjectKindArrayLiteral(target);
         return jdbcTemplate.query(
                 VECTOR_SQL,
                 this::mapRows,
                 releaseId,
+                subjectKindFilter,
                 target.getCareerTrack(),
                 target.getCareerTrack(),
                 capabilityFilter,
@@ -486,6 +496,14 @@ public final class JdbcPostgresSelectionQuery implements PostgresSelectionQuery 
                 .sorted()
                 .map(code -> "\"" + code.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
                 .collect(Collectors.joining(",", "{", "}"));
+    }
+
+    /** 允许的主体类型编为稳定排序的 PostgreSQL text[] 字面量；空集合已由目标构造器拒绝。 */
+    private String subjectKindArrayLiteral(SelectionTarget target) {
+        return arrayLiteral(target.getAllowedSubjectKinds().stream()
+                .map(Enum::name)
+                .sorted()
+                .toList());
     }
 
     /** 把查询向量编为 pgvector 字面量 [v1,v2,...]。 */

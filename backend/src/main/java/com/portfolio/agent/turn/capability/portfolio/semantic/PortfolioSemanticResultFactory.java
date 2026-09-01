@@ -1,6 +1,8 @@
 package com.portfolio.agent.turn.capability.portfolio.semantic;
 
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceCapability;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.evidence.ValidatedEvidenceBundle;
 import com.portfolio.agent.turn.planning.SemanticTask;
 import com.portfolio.agent.turn.planning.UserGoalProposal;
@@ -76,6 +78,7 @@ public final class PortfolioSemanticResultFactory {
      */
     private Optional<PortfolioSemanticResult> recommendation(
             PortfolioEvidenceInvocation invocation, ValidatedEvidenceBundle bundle) {
+        requireProjectRecommendationContract(invocation, bundle);
         if (bundle.getUnits().isEmpty()) return Optional.empty();
         int requestedSize = invocation.getRequestedSize();
         Set<String> constraints = invocation.getRecommendationConstraints();
@@ -106,6 +109,23 @@ public final class PortfolioSemanticResultFactory {
                 ranked.stream().map(value -> new PortfolioSemanticResult.Recommendation
                         .RecommendationItem(value.subjectId(), value.reasonCodes())).toList(),
                 List.copyOf(unsatisfied)));
+    }
+
+    /** Recommendation 是 Project-only：Invocation 与全部晋级单元必须同时满足。 */
+    private void requireProjectRecommendationContract(
+            PortfolioEvidenceInvocation invocation,
+            ValidatedEvidenceBundle bundle) {
+        boolean invocationIsProjectOnly = invocation.getTaskType()
+                == SemanticTask.Type.PORTFOLIO_RECOMMEND
+                && invocation.getAllowedSubjectKinds().equals(
+                Set.of(PortfolioSubjectKind.PROJECT));
+        boolean unitsAreProjectOnly = bundle.getUnits().stream().allMatch(
+                unit -> unit.getSubjectKind() == PortfolioSubjectKind.PROJECT);
+        if (!invocationIsProjectOnly || !unitsAreProjectOnly) {
+            throw new PortfolioEvidenceCapability.PortfolioCapabilityException(
+                    PortfolioEvidenceCapability.IntegrityReason
+                            .RECOMMENDATION_SUBJECT_KIND_CONTRACT_VIOLATION);
+        }
     }
 
     /**

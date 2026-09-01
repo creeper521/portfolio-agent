@@ -128,7 +128,8 @@ public final class PostgresPortfolioRetrieverAdapter implements PortfolioRetriev
             }
         }
         return new CandidateSubject(
-                subject.getSubjectId(), subject.getRoute(), subject.getTitle(),
+                subject.getSubjectId(), subject.getSubjectKind(),
+                subject.getRoute(), subject.getTitle(),
                 contentVersion, subject.getCareerTrack(),
                 subject.getCapabilityCodes(), candidates);
     }

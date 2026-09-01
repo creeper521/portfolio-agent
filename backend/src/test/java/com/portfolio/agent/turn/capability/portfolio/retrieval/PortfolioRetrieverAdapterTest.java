@@ -4,6 +4,7 @@ import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selectio
 import com.portfolio.agent.turn.capability.portfolio.retrieval.postgres.selection.RetrievalMode;
 import com.portfolio.agent.turn.capability.portfolio.AuthorizedSubjectScope;
 import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceInvocation;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerAchievementStatus;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimCategory;
 import com.portfolio.agent.turn.capability.portfolio.knowledge.AnswerClaimProjection;
@@ -137,6 +138,7 @@ class PortfolioRetrieverAdapterTest {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_FACT,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND),
                 List.of(),
                 "public-1",
@@ -150,6 +152,7 @@ class PortfolioRetrieverAdapterTest {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_RECOMMEND,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION),
                 List.of(),
                 "public-1",

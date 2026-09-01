@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,6 +85,7 @@ class PortfolioEvidenceCapabilityTest {
         return new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_FACT,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                 List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND), List.of(),
                 "public-1", CorpusBackend.POSTGRESQL, SearchStrategy.EXACT,
                 CorpusBackend.BUNDLE, SearchStrategy.EXACT);

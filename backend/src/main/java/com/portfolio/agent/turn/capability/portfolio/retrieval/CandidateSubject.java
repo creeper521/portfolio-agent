@@ -1,5 +1,8 @@
 package com.portfolio.agent.turn.capability.portfolio.retrieval;
 
+import com.portfolio.agent.turn.capability.portfolio.PortfolioEvidenceCapability;
+import com.portfolio.agent.turn.capability.portfolio.PortfolioSubjectKind;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -10,11 +13,12 @@ import java.util.Set;
  * <p>检索候选主体（不可变值对象）：一个公开主体的元数据与其原子 claim/Evidence 候选。
  * 不变量：每个候选的 subjectId 必须等于本主体标识、候选 Evidence 的 contentVersion
  * 必须与本主体一致（禁止跨版本混合），违反即抛出 IllegalArgumentException。
- * toString 刻意只输出计数，不泄露主体内容。
+ * subjectKind 必填；toString 刻意只输出闭集类型与计数，不泄露主体内容。
  */
 public final class CandidateSubject {
 
     private final String subjectId;
+    private final PortfolioSubjectKind subjectKind;
     private final String subjectRoute;
     private final String title;
     private final String contentVersion;
@@ -23,16 +27,24 @@ public final class CandidateSubject {
     private final List<ClaimEvidenceCandidate> candidates;
 
     public CandidateSubject(
-            String subjectId, String subjectRoute, String title, String contentVersion,
+            String subjectId, PortfolioSubjectKind subjectKind,
+            String subjectRoute, String title, String contentVersion,
             List<ClaimEvidenceCandidate> candidates) {
-        this(subjectId, subjectRoute, title, contentVersion, null, Set.of(), candidates);
+        this(subjectId, subjectKind, subjectRoute, title, contentVersion,
+                null, Set.of(), candidates);
     }
 
     public CandidateSubject(
-            String subjectId, String subjectRoute, String title, String contentVersion,
+            String subjectId, PortfolioSubjectKind subjectKind,
+            String subjectRoute, String title, String contentVersion,
             String careerTrack, Set<String> capabilityCodes,
             List<ClaimEvidenceCandidate> candidates) {
         this.subjectId = requireText(subjectId, "subjectId");
+        if (subjectKind == null) {
+            throw new PortfolioEvidenceCapability.PortfolioCapabilityException(
+                    PortfolioEvidenceCapability.IntegrityReason.SUBJECT_KIND_NOT_ALLOWED);
+        }
+        this.subjectKind = subjectKind;
         this.subjectRoute = requireText(subjectRoute, "subjectRoute");
         this.title = requireText(title, "title");
         this.contentVersion = requireText(contentVersion, "contentVersion");
@@ -52,6 +64,7 @@ public final class CandidateSubject {
     }
 
     public String getSubjectId() { return subjectId; }
+    public PortfolioSubjectKind getSubjectKind() { return subjectKind; }
     public String getSubjectRoute() { return subjectRoute; }
     public String getTitle() { return title; }
     public String getContentVersion() { return contentVersion; }
@@ -63,7 +76,8 @@ public final class CandidateSubject {
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof CandidateSubject that)) return false;
-        return subjectId.equals(that.subjectId) && subjectRoute.equals(that.subjectRoute)
+        return subjectId.equals(that.subjectId) && subjectKind == that.subjectKind
+                && subjectRoute.equals(that.subjectRoute)
                 && title.equals(that.title) && contentVersion.equals(that.contentVersion)
                 && Objects.equals(careerTrack, that.careerTrack)
                 && capabilityCodes.equals(that.capabilityCodes)
@@ -72,13 +86,14 @@ public final class CandidateSubject {
 
     @Override
     public int hashCode() {
-        return Objects.hash(subjectId, subjectRoute, title, contentVersion,
+        return Objects.hash(subjectId, subjectKind, subjectRoute, title, contentVersion,
                 careerTrack, capabilityCodes, candidates);
     }
 
     @Override
     public String toString() {
-        return "CandidateSubject{subjectCount=1, candidateCount=" + candidates.size() + '}';
+        return "CandidateSubject{subjectKind=" + subjectKind
+                + ", subjectCount=1, candidateCount=" + candidates.size() + '}';
     }
 
     private static String requireText(String value, String name) {

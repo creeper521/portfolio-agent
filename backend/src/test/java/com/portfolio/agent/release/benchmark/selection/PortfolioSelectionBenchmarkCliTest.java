@@ -103,6 +103,25 @@ class PortfolioSelectionBenchmarkCliTest {
     }
 
     @Test
+    void rejectsProjectOnlyBenchmarkWhoseAcceptableSetContainsACase() throws Exception {
+        Path cases = copyFixture("portfolio-selection-cases.json");
+        String invalidCases = Files.readString(cases).replace(
+                "[\"sql-audit-project\", \"role-reset-tool-project\"]",
+                "[\"case-role-reset\", \"role-reset-tool-project\"]");
+        Files.writeString(cases, invalidCases, StandardCharsets.UTF_8);
+        Path observations = temporary.resolve("project-kind-observations.json");
+        Files.writeString(observations, """
+                {"releaseVersion":"2026-07-29.1","observations":[]}
+                """, StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> PortfolioSelectionBenchmarkCli.run(new String[] {
+                "--cases", cases.toString(), "--observations", observations.toString(),
+                "--bundle", bundle().toString(),
+                "--json", temporary.resolve("project-kind-report.json").toString()
+        })).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void explicitlyVerifiesFileAndPostgresSnapshotsThroughSupplierSeam() throws Exception {
         Path cases = copyFixture("portfolio-selection-cases.json");
         Path observations = temporary.resolve("migration-observations.json");

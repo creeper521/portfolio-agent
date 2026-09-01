@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -50,6 +51,7 @@ class PortfolioInvocationFactoryTest {
         assertThatThrownBy(() -> new PortfolioEvidenceInvocation(
                 SemanticTask.Type.PORTFOLIO_COMPARE,
                 AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
                 List.of(), List.of("INVENTED"), "public-1",
                 CorpusBackend.BUNDLE, SearchStrategy.EXACT, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -79,6 +81,8 @@ class PortfolioInvocationFactoryTest {
         assertThat(invocation.getSubjectScope().getSubjects()).extracting(
                         AuthorizedSubjectScope.Subject::getReference)
                 .containsExactly("project-a");
+        assertThat(invocation.getAllowedSubjectKinds())
+                .containsExactly(PortfolioSubjectKind.PROJECT);
         assertThat(invocation.getFacets()).containsExactly(
                 PortfolioEvidenceInvocation.FacetProfile.IMPLEMENTATION,
                 PortfolioEvidenceInvocation.FacetProfile.TECHNICAL_DECISION,
@@ -104,11 +108,114 @@ class PortfolioInvocationFactoryTest {
 
         assertThat(invocation.getSubjectScope().getMode())
                 .isEqualTo(AuthorizedSubjectScope.Mode.ALL_PUBLISHED);
+        assertThat(invocation.getAllowedSubjectKinds())
+                .containsExactly(PortfolioSubjectKind.PROJECT);
         assertThat(invocation.getPrimaryStrategy()).isEqualTo(SearchStrategy.HYBRID);
         assertThat(invocation.getFallbackBackend()).isNull();
         assertThat(invocation.getRequestedSize()).isEqualTo(3);
         assertThat(invocation.getRecommendationConstraints())
                 .containsExactly("CAREER_TRACK_JAVA_BACKEND");
+    }
+
+    @Test
+    void comparisonDerivesEveryAllowedKindFromTypedExactSubjects() {
+        GoalSubjectReference project = new GoalSubjectReference(
+                GoalSubjectReference.Kind.PROJECT, "project-a",
+                GoalSubjectReference.Basis.SURFACE_HINT, null);
+        GoalSubjectReference caseStudy = new GoalSubjectReference(
+                GoalSubjectReference.Kind.CASE, "case-a",
+                GoalSubjectReference.Basis.SURFACE_HINT, null);
+        SemanticTask task = SemanticTask.of(
+                "task-compare", SemanticTask.Type.PORTFOLIO_COMPARE,
+                new SemanticTaskParameters(GoalKind.PORTFOLIO_COMPARE,
+                        new UserGoalProposal.PortfolioCompareParameters(Set.of(
+                                UserGoalProposal.PortfolioComparisonDimension.IMPLEMENTATION)),
+                        List.of(project, caseStudy)),
+                Set.of(GoalRequestedOutput.COMPARISON));
+
+        PortfolioEvidenceInvocation invocation = new PortfolioInvocationFactory(
+                CorpusBackend.BUNDLE).create(context(task));
+
+        assertThat(invocation.getAllowedSubjectKinds()).containsExactlyInAnyOrder(
+                PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE);
+    }
+
+    @Test
+    void invocationDefensivelyCopiesAndFreezesAllowedKinds() {
+        EnumSet<PortfolioSubjectKind> kinds = EnumSet.of(PortfolioSubjectKind.PROJECT);
+        PortfolioEvidenceInvocation invocation = new PortfolioEvidenceInvocation(
+                SemanticTask.Type.PORTFOLIO_FACT,
+                AuthorizedSubjectScope.allPublished("public-1"), kinds,
+                List.of(PortfolioEvidenceInvocation.FacetProfile.BACKGROUND), List.of(),
+                "public-1", CorpusBackend.BUNDLE, SearchStrategy.EXACT, null, null);
+
+        kinds.add(PortfolioSubjectKind.CASE);
+
+        assertThat(invocation.getAllowedSubjectKinds())
+                .containsExactly(PortfolioSubjectKind.PROJECT);
+        assertThatThrownBy(() -> invocation.getAllowedSubjectKinds().add(
+                PortfolioSubjectKind.CASE))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void recommendationInvocationRejectsAnyKindSetOtherThanProjectOnly() {
+        assertThatThrownBy(() -> new PortfolioEvidenceInvocation(
+                SemanticTask.Type.PORTFOLIO_RECOMMEND,
+                AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(PortfolioSubjectKind.PROJECT, PortfolioSubjectKind.CASE),
+                List.of(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION), List.of(),
+                UserGoalProposal.Depth.STANDARD, 2, Set.of(), "public-1",
+                CorpusBackend.BUNDLE, SearchStrategy.HYBRID, null, null))
+                .isInstanceOf(PortfolioEvidenceCapability.PortfolioCapabilityException.class)
+                .satisfies(failure -> assertThat(
+                        ((PortfolioEvidenceCapability.PortfolioCapabilityException) failure)
+                                .getFailure())
+                        .isEqualTo(com.portfolio.agent.turn.capability.portfolio.retrieval
+                                .RetrievalAttemptFailure.INTEGRITY_FAILURE))
+                .satisfies(failure -> assertThat(
+                        ((PortfolioEvidenceCapability.PortfolioCapabilityException) failure)
+                                .getIntegrityReason())
+                        .contains(PortfolioEvidenceCapability.IntegrityReason
+                                .RECOMMENDATION_SUBJECT_KIND_CONTRACT_VIOLATION));
+
+        assertThatThrownBy(() -> new PortfolioEvidenceInvocation(
+                SemanticTask.Type.PORTFOLIO_RECOMMEND,
+                AuthorizedSubjectScope.allPublished("public-1"),
+                Set.of(),
+                List.of(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION), List.of(),
+                UserGoalProposal.Depth.STANDARD, 2, Set.of(), "public-1",
+                CorpusBackend.BUNDLE, SearchStrategy.HYBRID, null, null))
+                .isInstanceOf(PortfolioEvidenceCapability.PortfolioCapabilityException.class);
+    }
+
+    @Test
+    void unresolvedResultSubjectFailsClosedAsCapabilityIntegrityFailure() {
+        GoalSubjectReference result = new GoalSubjectReference(
+                GoalSubjectReference.Kind.RESULT, "result-item",
+                GoalSubjectReference.Basis.CONTINUATION, null);
+        SemanticTask task = SemanticTask.of(
+                "task-result", SemanticTask.Type.PORTFOLIO_FACT,
+                new SemanticTaskParameters(GoalKind.PORTFOLIO_FACT,
+                        new UserGoalProposal.PortfolioFactParameters(
+                                Set.of(UserGoalProposal.Facet.OVERVIEW),
+                                UserGoalProposal.Depth.STANDARD),
+                        List.of(result)),
+                Set.of(GoalRequestedOutput.OVERVIEW));
+
+        assertThatThrownBy(() -> new PortfolioInvocationFactory(
+                CorpusBackend.BUNDLE).create(context(task)))
+                .isInstanceOf(PortfolioEvidenceCapability.PortfolioCapabilityException.class)
+                .satisfies(failure -> assertThat(
+                        ((PortfolioEvidenceCapability.PortfolioCapabilityException) failure)
+                                .getFailure())
+                        .isEqualTo(com.portfolio.agent.turn.capability.portfolio.retrieval
+                                .RetrievalAttemptFailure.INTEGRITY_FAILURE))
+                .satisfies(failure -> assertThat(
+                        ((PortfolioEvidenceCapability.PortfolioCapabilityException) failure)
+                                .getIntegrityReason())
+                        .contains(PortfolioEvidenceCapability.IntegrityReason
+                                .UNRESOLVED_RESULT_SUBJECT));
     }
 
     @Test

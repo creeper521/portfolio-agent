@@ -70,7 +70,8 @@ class PortfolioTaskExecutorTest {
                 "statement", "detail", AnswerAchievementStatus.IMPLEMENTED_TESTED,
                 AnswerContributionType.PRIMARY, AnswerVerificationBasis.EVIDENCE_SUPPORTED,
                 AnswerClaimVerificationStatus.VERIFIED, AnswerMateriality.KEY, List.of("evidence-1"));
-        return new ValidatedEvidenceUnit("project-a", claim,
+        return new ValidatedEvidenceUnit(
+                "project-a", PortfolioSubjectKind.PROJECT, claim,
                 new PublicSourceReferenceValue(
                         "E-01", "Evidence", "public-1", "DOCUMENT",
                         "/projects/project-a", "/evidence/e-01"));

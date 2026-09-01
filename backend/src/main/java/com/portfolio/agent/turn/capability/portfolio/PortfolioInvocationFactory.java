@@ -3,11 +3,14 @@ package com.portfolio.agent.turn.capability.portfolio;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.CorpusBackend;
 import com.portfolio.agent.turn.capability.portfolio.retrieval.SearchStrategy;
 import com.portfolio.agent.turn.execution.TaskExecutionContext;
+import com.portfolio.agent.turn.planning.GoalSubjectReference;
 import com.portfolio.agent.turn.planning.SemanticTask;
 import com.portfolio.agent.turn.planning.UserGoalProposal;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 从 SemanticTask 装配 {@link PortfolioEvidenceInvocation} 的工厂。
@@ -49,15 +52,18 @@ public final class PortfolioInvocationFactory {
         int requestedSize = 0;
         java.util.Set<String> recommendationConstraints = java.util.Set.of();
         AuthorizedSubjectScope scope;
+        Set<PortfolioSubjectKind> allowedSubjectKinds;
         UserGoalProposal.GoalParameters parameters = task.getParameters().getParameters();
         if (parameters instanceof UserGoalProposal.PortfolioFactParameters fact) {
             scope = AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
+            allowedSubjectKinds = allowedSubjectKinds(task.getSubjectReferences());
             depth = fact.getDepth();
             UserGoalProposal.Depth requestedDepth = depth;
             fact.getFacets().stream().sorted()
                     .forEach(value -> facets.addAll(facets(value, requestedDepth)));
         } else if (parameters instanceof UserGoalProposal.PortfolioCompareParameters comparison) {
             scope = AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
+            allowedSubjectKinds = allowedSubjectKinds(task.getSubjectReferences());
             dimensions.addAll(comparison.getDimensions().stream()
                     .sorted().map(Enum::name).toList());
         } else if (parameters instanceof UserGoalProposal.PortfolioRecommendationParameters recommendation) {
@@ -65,6 +71,7 @@ public final class PortfolioInvocationFactory {
                     ? AuthorizedSubjectScope.allPublished(context.getContentReleaseId())
                     : AuthorizedSubjectScope.exact(task.getSubjectReferences(), context.getContentReleaseId());
             facets.add(PortfolioEvidenceInvocation.FacetProfile.RECOMMENDATION);
+            allowedSubjectKinds = Set.of(PortfolioSubjectKind.PROJECT);
             requestedSize = recommendation.getRequestedSize();
             recommendationConstraints = recommendation.getConstraints();
         } else {
@@ -81,10 +88,25 @@ public final class PortfolioInvocationFactory {
                 facets.stream().distinct().toList(),
                 task.getParameters().getAudienceProfile());
         return new PortfolioEvidenceInvocation(
-                task.getType(), scope, orderedFacets, dimensions,
+                task.getType(), scope, allowedSubjectKinds, orderedFacets, dimensions,
                 depth, requestedSize, recommendationConstraints,
                 context.getContentReleaseId(), primaryBackend, strategy,
                 fallbackBackend, fallbackStrategy);
+    }
+
+    /** 从可信 typed 主体引用推导检索类别；RESULT 必须在进入本工厂前解析。 */
+    private Set<PortfolioSubjectKind> allowedSubjectKinds(
+            List<GoalSubjectReference> references) {
+        EnumSet<PortfolioSubjectKind> kinds = EnumSet.noneOf(PortfolioSubjectKind.class);
+        for (GoalSubjectReference reference : references) {
+            kinds.add(switch (reference.getKind()) {
+                case PROJECT -> PortfolioSubjectKind.PROJECT;
+                case CASE -> PortfolioSubjectKind.CASE;
+                case RESULT -> throw new PortfolioEvidenceCapability.PortfolioCapabilityException(
+                        PortfolioEvidenceCapability.IntegrityReason.UNRESOLVED_RESULT_SUBJECT);
+            });
+        }
+        return Set.copyOf(kinds);
     }
 
     /**
