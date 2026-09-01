@@ -51,6 +51,14 @@ describe('PublicTurn happy-path body assertions', () => {
     expect(() => expectAnswer(body)).toThrow(/resolution 必须为 COMPLETE/)
   })
 
+  it('accepts PARTIAL only when the caller marks the discussion route as partial-capable', () => {
+    const body = clone(validAnswer())
+    body.answer!.resolution = 'PARTIAL'
+    body.answer!.goalResults![0]!.coverage = 'PARTIAL'
+    expect(() => expectNonEmptyAnswer(body)).toThrow(/不接受 resolution PARTIAL/)
+    expect(() => expectNonEmptyAnswer(body, { allowPartial: true })).not.toThrow()
+  })
+
   it('rejects empty goalResults', () => {
     const body = clone(validAnswer())
     body.answer!.goalResults = []

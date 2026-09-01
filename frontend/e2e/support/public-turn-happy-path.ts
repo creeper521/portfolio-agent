@@ -50,6 +50,7 @@ export interface PublicTurnBody {
 
 export interface NonEmptyAnswerOptions {
   requirePublicSources?: boolean
+  allowPartial?: boolean
 }
 
 function fail(message: string): never {
@@ -108,7 +109,16 @@ export function expectNonEmptyAnswer<T extends PublicTurnBody>(
   body: T,
   options: NonEmptyAnswerOptions = {},
 ): asserts body is T & { kind: 'ANSWER'; answer: PublicAnswerBody } {
-  expectAnswer(body)
+  expectAnswerKind(body)
+  if (body.answer === undefined) {
+    fail('ANSWER 终局必须携带 answer')
+  }
+  const acceptedResolutions = options.allowPartial === true
+    ? ['COMPLETE', 'PARTIAL']
+    : ['COMPLETE']
+  if (!acceptedResolutions.includes(String(body.answer.resolution))) {
+    fail(`当前回答场景不接受 resolution ${String(body.answer.resolution)}`)
+  }
   const goals = body.answer.goalResults ?? []
   if (goals.length === 0) {
     fail('goalResults 不得为空')

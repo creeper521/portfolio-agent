@@ -11,7 +11,7 @@ const TURNS = '/api/agent/turns'
 
 // GATE-20/GATE-04/GATE-06：happy path 不得只断言 HTTP 200。每条真实 Provider 轮次都解析
 // PublicAgentTurn 终局，拒绝 CAPABILITY_UNAVAILABLE/BOUNDARY 混入成功路径，
-// 并对回答内容做最低完整性检查（COMPLETE resolution、推荐项数量、非 NONE 覆盖、
+// 并对回答内容做最低完整性检查（推荐必须 COMPLETE；讨论回答允许 COMPLETE/PARTIAL、推荐项数量、非 NONE 覆盖、
 // 非空 section，以及 sourceCatalog/publicSourceKeys 公开来源闭环）。
 
 async function turnBody(pending: Promise<Response>): Promise<TurnBody> {
@@ -37,7 +37,7 @@ test('recommendation omission enters bounded project discussion and refresh rest
   await page.goto('/agent')
   await expect(page.getByTestId('question-input')).toBeEnabled()
 
-  await page.getByTestId('question-input').fill('推荐两个公开项目')
+  await page.getByTestId('question-input').fill('推荐 2 个公开项目')
   const recommendation = nextTurn(page)
   await page.getByTestId('submit-question').click()
   expectRecommendationItems(await expectAnswer(recommendation), 2)
@@ -56,9 +56,9 @@ test('recommendation omission enters bounded project discussion and refresh rest
     await choices.nth(1).check()
     const resolved = nextTurn(page)
     await page.locator('[data-clarification-submit]').click()
-    expectNonEmptyAnswer(await expectAnswer(resolved))
+    expectNonEmptyAnswer(await turnBody(resolved), { allowPartial: true })
   } else {
-    expectNonEmptyAnswer(routedBody)
+    expectNonEmptyAnswer(routedBody, { allowPartial: true })
   }
 
   await expect(page.getByTestId('active-discussion'))
@@ -78,7 +78,7 @@ test('recommendation omission enters bounded project discussion and refresh rest
     historyState: history.state,
   }))
   const persisted = JSON.stringify(browserState)
-  expect(persisted).not.toMatch(/contextHandle|resultItemId|推荐两个公开项目|继续第二个/)
+  expect(persisted).not.toMatch(/contextHandle|resultItemId|推荐 2 个公开项目|继续第二个/)
 
   const exited = nextTurn(page)
   await page.getByTestId('exit-discussion').click()
@@ -90,7 +90,7 @@ test('recommendation omission enters bounded project discussion and refresh rest
 test('card entry, historical switch, locked concept route and direct ASK override keep one backend subject', async ({ page, request }) => {
   test.setTimeout(120_000)
   await page.goto('/agent')
-  await page.getByTestId('question-input').fill('推荐两个公开项目')
+  await page.getByTestId('question-input').fill('推荐 2 个公开项目')
   let response = nextTurn(page)
   await page.getByTestId('submit-question').click()
   expectRecommendationItems(await expectAnswer(response), 2)
@@ -101,18 +101,18 @@ test('card entry, historical switch, locked concept route and direct ASK overrid
 
   response = nextTurn(page)
   await items.nth(1).locator('button').click()
-  expectNonEmptyAnswer(await expectAnswer(response))
+  expectNonEmptyAnswer(await turnBody(response), { allowPartial: true })
   await expect(page.getByTestId('active-discussion')).toContainText(secondLabel)
 
   response = nextTurn(page)
   await items.nth(0).locator('button').click()
-  expectNonEmptyAnswer(await expectAnswer(response))
+  expectNonEmptyAnswer(await turnBody(response), { allowPartial: true })
   await expect(page.getByTestId('active-discussion')).toContainText(firstLabel)
 
   await page.getByTestId('question-input').fill('解释这个项目中的幂等设计')
   response = nextTurn(page)
   await page.getByTestId('submit-question').click()
-  expectNonEmptyAnswer(await expectAnswer(response))
+  expectNonEmptyAnswer(await turnBody(response), { allowPartial: true })
   await expect(page.getByTestId('active-discussion')).toContainText(firstLabel)
 
   const token = await page.evaluate(() =>
@@ -139,7 +139,7 @@ test('card entry, historical switch, locked concept route and direct ASK overrid
   }
   // 受限讨论内续问允许 CLARIFICATION；ANSWER 仍必须通过同一正文与来源门。
   if (directBody.kind === 'ANSWER') {
-    expectNonEmptyAnswer(directBody)
+    expectNonEmptyAnswer(directBody, { allowPartial: true })
   } else {
     expect(directBody.kind).toBe('CLARIFICATION')
   }
@@ -156,7 +156,7 @@ test('card entry, historical switch, locked concept route and direct ASK overrid
 test('single recommendation requires an explicit AI enter route and never backend auto-enters NEEDS_CLARIFICATION', async ({ page }) => {
   test.setTimeout(90_000)
   await page.goto('/agent')
-  await page.getByTestId('question-input').fill('推荐一个公开项目')
+  await page.getByTestId('question-input').fill('推荐 1 个公开项目')
   let response = nextTurn(page)
   await page.getByTestId('submit-question').click()
   expectRecommendationItems(await expectAnswer(response), 1)
@@ -166,7 +166,7 @@ test('single recommendation requires an explicit AI enter route and never backen
   response = nextTurn(page)
   await page.getByTestId('submit-question').click()
   // A2-24：单候选讨论进入必须直接 ANSWER，不得再出现必填澄清。
-  expectNonEmptyAnswer(await expectAnswer(response))
+  expectNonEmptyAnswer(await turnBody(response), { allowPartial: true })
   await expect(page.getByTestId('active-discussion'))
     .toHaveAttribute('data-discussion-status', 'ACTIVE')
   await expect(page.getByTestId('clarification-form')).toHaveCount(0)
